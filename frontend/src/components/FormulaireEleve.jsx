@@ -52,7 +52,7 @@ export default function FormulaireEleve({ onCreated }) {
       <Card>
         <h2 style={{ marginTop: 0 }}>Inscription d'un élève</h2>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: -8, marginBottom: 20 }}>
-          À remplir une fois par enfant. Les informations seront utilisées pour construire le planning des cours.
+          Si votre enfant souhaite plusieurs cours par semaine (par exemple un cours en groupe et un cours individuel), remplissez ce formulaire une fois pour chaque cours souhaité.
         </p>
 
         {submitted && (

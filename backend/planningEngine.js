@@ -117,11 +117,20 @@ function generatePlanningProposal(students, profs, courts, slots) {
   const unplaced = new Set(students.map(s => s.id));
   const result = [];
   const lastCourtForProf = {};
+  // Jours déjà utilisés par personne (regroupée par nom normalisé), pour éviter
+  // de placer deux demandes de cours de la même personne le même jour quand
+  // elle a demandé plusieurs cours par semaine (plusieurs soumissions du formulaire).
+  const daysUsedByName = {};
 
   possibleSlots.forEach(({ slot, prof }) => {
-    const candidates = students.filter(s =>
-      unplaced.has(s.id) && studentAvailableForSlot(s, slot.jour, slot.debut, slot.fin)
-    );
+    const candidates = students.filter(s => {
+      if (!unplaced.has(s.id)) return false;
+      if (!studentAvailableForSlot(s, slot.jour, slot.debut, slot.fin)) return false;
+      const key = norm(s.name);
+      const usedDays = daysUsedByName[key];
+      if (usedDays && usedDays.has(slot.jour)) return false;
+      return true;
+    });
     if (candidates.length === 0) return;
 
     const scoreProf = (s) => s.prof_prefere && namesMatch(prof.name, s.prof_prefere) ? 3 : 0;
@@ -175,7 +184,12 @@ function generatePlanningProposal(students, profs, courts, slots) {
     groups.sort((a, b) => b.score - a.score);
     const chosen = groups[0];
 
-    chosen.members.forEach(m => unplaced.delete(m.id));
+    chosen.members.forEach(m => {
+      unplaced.delete(m.id);
+      const key = norm(m.name);
+      if (!daysUsedByName[key]) daysUsedByName[key] = new Set();
+      daysUsedByName[key].add(slot.jour);
+    });
     result.push({
       slotId: slot.id,
       courtId: slot.court_id,

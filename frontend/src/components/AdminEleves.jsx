@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card } from './Common.jsx';
 import { api } from '../api.js';
 
 const STARS = [1, 2, 3, 4, 5];
+
+function normName(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
 
 export default function AdminEleves({ students, onChanged }) {
   const [filter, setFilter] = useState('');
@@ -25,6 +29,25 @@ export default function AdminEleves({ students, onChanged }) {
     }
   };
 
+  // Compte le nombre de demandes par nom (élèves voulant plusieurs cours par
+  // semaine remplissent le formulaire une fois par cours souhaité) et attribue
+  // à chaque demande son numéro d'ordre (1ère, 2ème, ...).
+  const { countByName, indexById } = useMemo(() => {
+    const counts = {};
+    students.forEach(s => {
+      const key = normName(s.name);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const seen = {};
+    const indexes = {};
+    students.forEach(s => {
+      const key = normName(s.name);
+      seen[key] = (seen[key] || 0) + 1;
+      indexes[s.id] = seen[key];
+    });
+    return { countByName: counts, indexById: indexes };
+  }, [students]);
+
   const filtered = students.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()));
 
   return (
@@ -43,7 +66,14 @@ export default function AdminEleves({ students, onChanged }) {
           <Card key={s.id} style={{ padding: '1rem 1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{s.name} {s.age && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>· {s.age} ans</span>}</p>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {s.name} {s.age && <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>· {s.age} ans</span>}
+                  {countByName[normName(s.name)] > 1 && (
+                    <span style={{ background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 999 }}>
+                      {indexById[s.id]}ᵉ demande sur {countByName[normName(s.name)]}
+                    </span>
+                  )}
+                </p>
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
                   {s.classement ? `Classé : ${s.classement}` : 'Non classé'}
                   {' · '}
