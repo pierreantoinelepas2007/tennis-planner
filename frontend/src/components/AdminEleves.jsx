@@ -105,12 +105,9 @@ export default function AdminEleves({ students, onChanged }) {
                     key={n}
                     onClick={() => updateStudent(s.id, { niveauEtoile: s.niveauEtoile === n ? null : n })}
                     aria-label={`${n} étoiles`}
-                    style={{ padding: '2px 6px', border: 'none', background: 'transparent' }}
+                    style={{ padding: '2px 4px', border: 'none', background: 'transparent', fontSize: 20, lineHeight: 1, color: s.niveauEtoile >= n ? 'var(--clay)' : 'var(--text-muted)' }}
                   >
-                    <i
-                      className={`ti ${s.niveauEtoile >= n ? 'ti-star-filled' : 'ti-star'}`}
-                      style={{ fontSize: 18, color: s.niveauEtoile >= n ? 'var(--clay)' : 'var(--text-muted)' }}
-                    ></i>
+                    {s.niveauEtoile >= n ? '★' : '☆'}
                   </button>
                 ))}
               </div>
