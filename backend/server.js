@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { pool, initDb } = require('./db');
 const { generatePlanningProposal } = require('./planningEngine');
+const { seedIfEmpty } = require('./seed');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -306,6 +307,7 @@ app.get('*', (req, res) => {
 // ---------- Démarrage ----------
 
 initDb()
+  .then(() => seedIfEmpty(pool))
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Serveur démarré sur le port ${PORT}`);
