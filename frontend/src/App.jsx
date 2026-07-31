@@ -62,7 +62,7 @@ export default function App() {
       <div>
         {tab === 'accueil' && <Accueil setTab={setTab} students={students} profs={profs} courts={courts} />}
         {tab === 'formulaire' && <FormulaireEleve onCreated={refreshAll} />}
-        {tab === 'admin-eleves' && <AdminEleves students={students} onChanged={refreshAll} />}
+        {tab === 'admin-eleves' && <AdminEleves students={students} profs={profs} onChanged={refreshAll} />}
         {tab === 'admin-profs' && <AdminProfs profs={profs} onChanged={refreshAll} />}
         {tab === 'admin-terrains' && <AdminTerrains courts={courts} onChanged={refreshAll} />}
         {tab === 'planning' && (

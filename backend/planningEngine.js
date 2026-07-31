@@ -80,8 +80,43 @@ function norm(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
 
+// Distance de Levenshtein : nombre minimal d'insertions/suppressions/substitutions
+// pour transformer une chaîne en une autre. Sert à tolérer les petites fautes
+// de frappe (ex: "Gothier" vs "Gauthier") sans faire de faux positifs sur des
+// noms réellement différents.
+function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,      // suppression
+        dp[i][j - 1] + 1,      // insertion
+        dp[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  return dp[m][n];
+}
+
+// Deux noms "matchent" s'ils sont identiques après normalisation, ou si leur
+// distance de Levenshtein reste faible par rapport à leur longueur (tolère 1
+// faute sur un nom court, jusqu'à 2 sur un nom plus long).
 function namesMatch(a, b) {
-  return norm(a) === norm(b);
+  const na = norm(a), nb = norm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const maxLen = Math.max(na.length, nb.length);
+  // Noms très courts (3 caractères ou moins) : aucune tolérance, le risque de
+  // confondre deux personnes différentes est trop élevé (ex: "Léa" vs "Léo").
+  if (maxLen <= 3) return false;
+  const threshold = maxLen <= 6 ? 1 : 2;
+  return levenshteinDistance(na, nb) <= threshold;
 }
 
 function findStudentByName(students, name) {

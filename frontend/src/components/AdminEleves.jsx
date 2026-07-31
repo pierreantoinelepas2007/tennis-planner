@@ -1,14 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from './Common.jsx';
 import { api } from '../api.js';
+import { normName, matchQuality } from '../nameMatching.js';
 
 const STARS = [1, 2, 3, 4, 5];
 
-function normName(s) {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-}
-
-export default function AdminEleves({ students, onChanged }) {
+export default function AdminEleves({ students, profs, onChanged }) {
   const [filter, setFilter] = useState('');
 
   const updateStudent = async (id, patch) => {
@@ -50,6 +47,9 @@ export default function AdminEleves({ students, onChanged }) {
 
   const filtered = students.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()));
 
+  const profNames = useMemo(() => profs.map(p => p.name), [profs]);
+  const studentNames = useMemo(() => students.map(s => s.name), [students]);
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -80,13 +80,21 @@ export default function AdminEleves({ students, onChanged }) {
                   {s.preferenceGroupe === 'groupe' ? 'Préfère groupe' : s.preferenceGroupe === 'individuel' ? 'Préfère individuel' : 'Indifférent'}
                 </p>
                 {s.jouerAvec?.length > 0 && (
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Veut jouer avec : {s.jouerAvec.join(', ')}</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Veut jouer avec : {s.jouerAvec.map((name, i) => (
+                      <NameWithAlert key={i} name={name} knownNames={studentNames} excludeSelf={s.name} isLast={i === s.jouerAvec.length - 1} />
+                    ))}
+                  </p>
                 )}
                 {s.terrainAdjacentAvec && (
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Terrain à côté de : {s.terrainAdjacentAvec}</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Terrain à côté de : <NameWithAlert name={s.terrainAdjacentAvec} knownNames={studentNames} excludeSelf={s.name} isLast />
+                  </p>
                 )}
                 {s.profPrefere && (
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Préférence prof : {s.profPrefere}</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Préférence prof : <NameWithAlert name={s.profPrefere} knownNames={profNames} isLast />
+                  </p>
                 )}
                 {s.dispoText && (
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Dispo : {s.dispoText}</p>
@@ -116,5 +124,27 @@ export default function AdminEleves({ students, onChanged }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// Affiche un nom saisi par un parent, avec une alerte visuelle si ce nom ne
+// correspond (même approximativement) à personne de connu dans le système
+// (aucun prof de ce nom, ou aucun autre élève de ce nom).
+function NameWithAlert({ name, knownNames, excludeSelf, isLast }) {
+  const relevantNames = excludeSelf ? knownNames.filter(n => normName(n) !== normName(excludeSelf)) : knownNames;
+  const quality = matchQuality(name, relevantNames);
+  return (
+    <span>
+      {name}
+      {quality === 'none' && (
+        <span
+          title="Ce nom ne correspond à personne de connu dans le système. Vérifiez l'orthographe ou si la personne est bien enregistrée."
+          style={{ marginLeft: 4, color: 'var(--warning-text)', fontWeight: 600, cursor: 'help' }}
+        >
+          ⚠
+        </span>
+      )}
+      {!isLast && ', '}
+    </span>
   );
 }
