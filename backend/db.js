@@ -32,6 +32,15 @@ async function initDb() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS student_disponibilites (
+      id TEXT PRIMARY KEY,
+      student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+      jour TEXT NOT NULL,
+      heure TEXT NOT NULL
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS profs (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

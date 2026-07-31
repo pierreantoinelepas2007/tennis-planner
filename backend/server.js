@@ -19,6 +19,7 @@ const uid = () => crypto.randomBytes(6).toString('hex');
 app.get('/api/students', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM students ORDER BY created_at ASC');
+    const { rows: dispoRows } = await pool.query('SELECT * FROM student_disponibilites');
     const students = rows.map(r => ({
       id: r.id,
       name: r.name,
@@ -29,7 +30,7 @@ app.get('/api/students', async (req, res) => {
       jouerAvec: r.jouer_avec || [],
       terrainAdjacentAvec: r.terrain_adjacent_avec,
       profPrefere: r.prof_prefere,
-      dispoText: r.dispo_text,
+      disponibilites: dispoRows.filter(d => d.student_id === r.id).map(d => ({ jour: d.jour, heure: d.heure })),
     }));
     res.json(students);
   } catch (e) {
@@ -43,11 +44,18 @@ app.post('/api/students', async (req, res) => {
     const b = req.body;
     const id = uid();
     await pool.query(
-      `INSERT INTO students (id, name, age, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere, dispo_text)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO students (id, name, age, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [id, b.name, b.age || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
-        JSON.stringify(b.jouerAvec || []), b.terrainAdjacentAvec || null, b.profPrefere || null, b.dispoText || null]
+        JSON.stringify(b.jouerAvec || []), b.terrainAdjacentAvec || null, b.profPrefere || null]
     );
+    const disponibilites = Array.isArray(b.disponibilites) ? b.disponibilites : [];
+    for (const d of disponibilites) {
+      await pool.query(
+        'INSERT INTO student_disponibilites (id, student_id, jour, heure) VALUES ($1, $2, $3, $4)',
+        [uid(), id, d.jour, d.heure]
+      );
+    }
     res.status(201).json({ id });
   } catch (e) {
     console.error(e);
@@ -231,12 +239,17 @@ app.get('/api/planning', async (req, res) => {
 app.post('/api/planning/generate', async (req, res) => {
   try {
     const { rows: studentRows } = await pool.query('SELECT * FROM students');
+    const { rows: studentDispoRows } = await pool.query('SELECT * FROM student_disponibilites');
     const { rows: profRows } = await pool.query('SELECT * FROM profs');
     const { rows: dispoRows } = await pool.query('SELECT * FROM prof_disponibilites');
     const { rows: courtRows } = await pool.query('SELECT * FROM courts');
     const { rows: slotRows } = await pool.query('SELECT * FROM court_slots');
 
-    const students = studentRows.map(s => ({ ...s, jouer_avec: s.jouer_avec || [] }));
+    const students = studentRows.map(s => ({
+      ...s,
+      jouer_avec: s.jouer_avec || [],
+      disponibilites: studentDispoRows.filter(d => d.student_id === s.id),
+    }));
     const profs = profRows.map(p => ({
       ...p,
       disponibilites: dispoRows.filter(d => d.prof_id === p.id),

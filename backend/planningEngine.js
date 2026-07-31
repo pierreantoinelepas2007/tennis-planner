@@ -15,65 +15,25 @@ function timeToMinutes(t) {
   return h * 60 + (m || 0);
 }
 
-function parseDispoText(text) {
-  if (!text) return [];
-  const lower = text.toLowerCase();
-  const constraints = [];
-  const dayRegex = new RegExp(Object.keys(JOUR_ALIASES).sort((a, b) => b.length - a.length).join('|'), 'g');
-  let match;
-  const dayPositions = [];
-  while ((match = dayRegex.exec(lower)) !== null) {
-    dayPositions.push({ day: JOUR_ALIASES[match[0]], index: match.index, len: match[0].length });
-  }
-  if (dayPositions.length === 0) {
-    return [{ jour: null, minStart: 0, maxEnd: 24 * 60 }];
-  }
-  dayPositions.forEach((dp, i) => {
-    const start = dp.index + dp.len;
-    const end = i + 1 < dayPositions.length ? dayPositions[i + 1].index : lower.length;
-    const segment = lower.slice(start, end);
-
-    let minStart = 0, maxEnd = 24 * 60;
-
-    const rangeMatch = segment.match(/(\d{1,2})h?(\d{2})?\s*(?:-|à|a)\s*(\d{1,2})h?(\d{2})?/);
-    const afterMatch = segment.match(/apr[eè]s\s*(\d{1,2})h?(\d{2})?/);
-    const beforeMatch = segment.match(/avant\s*(\d{1,2})h?(\d{2})?/);
-
-    if (rangeMatch) {
-      const h1 = parseInt(rangeMatch[1], 10), m1 = parseInt(rangeMatch[2] || '0', 10);
-      const h2 = parseInt(rangeMatch[3], 10), m2 = parseInt(rangeMatch[4] || '0', 10);
-      minStart = h1 * 60 + m1;
-      maxEnd = h2 * 60 + m2;
-    } else if (afterMatch) {
-      const h1 = parseInt(afterMatch[1], 10), m1 = parseInt(afterMatch[2] || '0', 10);
-      minStart = h1 * 60 + m1;
-      maxEnd = 24 * 60;
-    } else if (beforeMatch) {
-      const h1 = parseInt(beforeMatch[1], 10), m1 = parseInt(beforeMatch[2] || '0', 10);
-      minStart = 0;
-      maxEnd = h1 * 60 + m1;
-    } else if (segment.includes('matin')) {
-      minStart = 6 * 60; maxEnd = 13 * 60;
-    } else if (segment.includes('après-midi') || segment.includes('apres-midi') || segment.includes('après midi') || segment.includes('apres midi')) {
-      minStart = 13 * 60; maxEnd = 20 * 60;
-    } else if (segment.includes('soir')) {
-      minStart = 17 * 60; maxEnd = 22 * 60;
-    }
-
-    constraints.push({ jour: dp.day, minStart, maxEnd });
-  });
-  return constraints;
-}
-
+// Les disponibilités des élèves sont maintenant saisies via une grille
+// cliquable (jour × heure), donc stockées comme une liste exacte de créneaux
+// d'une heure cochés par le parent — plus de texte libre à interpréter. Un
+// élève est disponible pour un créneau du planning (qui peut durer plus d'une
+// heure) si TOUTES les heures qu'il couvre ont été cochées pour ce jour.
 function studentAvailableForSlot(student, jour, debut, fin) {
-  const constraints = parseDispoText(student.dispo_text);
-  if (constraints.length === 0) return false;
+  const disponibilites = student.disponibilites || [];
+  const heuresCochees = new Set(
+    disponibilites.filter(d => d.jour === jour).map(d => d.heure)
+  );
+  if (heuresCochees.size === 0) return false;
   const slotStart = timeToMinutes(debut);
   const slotEnd = timeToMinutes(fin);
-  return constraints.some(c => {
-    if (c.jour !== null && c.jour !== jour) return false;
-    return slotStart >= c.minStart - 30 && slotEnd <= c.maxEnd + 30;
-  });
+  for (let m = slotStart; m < slotEnd; m += 60) {
+    const h = Math.floor(m / 60);
+    const heureLabel = `${h.toString().padStart(2, '0')}:00`;
+    if (!heuresCochees.has(heureLabel)) return false;
+  }
+  return true;
 }
 
 function norm(s) {
@@ -237,14 +197,11 @@ function generatePlanningProposal(students, profs, courts, slots) {
     return Math.abs(a.niveau_etoile - b.niveau_etoile) <= 1;
   };
 
-  // Jours où `student` est disponible, en excluant les jours déjà retenus
-  // pour une autre de ses demandes de cours (pertinent seulement s'il a
-  // plusieurs demandes, sinon retourne simplement tous ses jours dispo).
+  // Jours où `student` a au moins un créneau coché dans sa grille de
+  // disponibilités, en excluant les jours déjà retenus pour une autre de ses
+  // demandes de cours (pertinent seulement s'il a plusieurs demandes).
   const availableDaysFor = (student) => {
-    const days = new Set();
-    JOURS.forEach(jour => {
-      if (studentAvailableForSlot(student, jour, '00:00', '23:59')) days.add(jour);
-    });
+    const days = new Set((student.disponibilites || []).map(d => d.jour));
     return days;
   };
 

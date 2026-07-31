@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, TextField, SelectField } from './Common.jsx';
 import { api } from '../api.js';
+import GrilleDisponibilites from './GrilleDisponibilites.jsx';
 
 // Échelle des classements belges (AFT / Tennis Padel Wallonie-Bruxelles), du
 // plus faible au plus fort, telle qu'affichée dans le formulaire. "Non
@@ -42,14 +43,14 @@ export default function FormulaireEleve({ onCreated }) {
   const [jouerAvec, setJouerAvec] = useState('');
   const [terrainAdjacentAvec, setTerrainAdjacentAvec] = useState('');
   const [profPrefere, setProfPrefere] = useState('');
-  const [dispoText, setDispoText] = useState('');
+  const [disponibilites, setDisponibilites] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   const reset = () => {
     setName(''); setAge(''); setClassement(''); setPreference('indifferent');
-    setJouerAvec(''); setTerrainAdjacentAvec(''); setProfPrefere(''); setDispoText('');
+    setJouerAvec(''); setTerrainAdjacentAvec(''); setProfPrefere(''); setDisponibilites([]);
   };
 
   const submit = async (e) => {
@@ -66,7 +67,7 @@ export default function FormulaireEleve({ onCreated }) {
         jouerAvec: jouerAvec.split(',').map(s => s.trim()).filter(Boolean),
         terrainAdjacentAvec: terrainAdjacentAvec.trim(),
         profPrefere: profPrefere.trim(),
-        dispoText: dispoText.trim(),
+        disponibilites,
       });
       setSubmitted(true);
       reset();
@@ -140,18 +141,10 @@ export default function FormulaireEleve({ onCreated }) {
             placeholder="Nom du professeur, ou laisser vide"
           />
 
-          <label style={{ display: 'block', marginBottom: 18 }}>
-            <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>Disponibilités</span>
-            <textarea
-              value={dispoText}
-              onChange={e => setDispoText(e.target.value)}
-              placeholder="Ex : mercredi après-midi, vendredi après 17h, samedi 10h-12h"
-              style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
-            />
-            <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Précisez les jours et, si possible, une heure ou une plage horaire (ex : "après 17h", "mercredi après-midi", "mardi 18h-19h").
-            </span>
-          </label>
+          <div style={{ marginBottom: 18 }}>
+            <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Disponibilités</span>
+            <GrilleDisponibilites value={disponibilites} onChange={setDisponibilites} />
+          </div>
 
           <button type="submit" disabled={submitting} style={{ width: '100%' }}>
             {submitting ? 'Enregistrement...' : "Enregistrer l'inscription"}
