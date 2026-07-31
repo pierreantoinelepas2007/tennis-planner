@@ -80,7 +80,7 @@ export default function VueProf({ profs, planning, courts, students }) {
               <p className="time" style={{ fontWeight: 600, fontSize: 14, margin: 0 }}>{b.jour} {b.debut}–{b.fin}</p>
               <p className="meta" style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '2px 0 6px' }}>{courtsById[b.courtId]?.name || 'Terrain'}</p>
               <p className="students" style={{ fontSize: 13, margin: 0 }}>
-                {b.studentIds.map(id => studentsById[id]?.name).filter(Boolean).join(', ') || 'Aucun élève'}
+                {b.studentIds.map(id => studentsById[id]?.name).filter(Boolean).join(', ') || 'Aucun participant'}
               </p>
             </div>
           ))}

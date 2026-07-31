@@ -60,9 +60,9 @@ export default function AdminEleves({ students, profs, onChanged }) {
     }
   };
 
-  // Compte le nombre de demandes par nom (élèves voulant plusieurs cours par
-  // semaine remplissent le formulaire une fois par cours souhaité) et attribue
-  // à chaque demande son numéro d'ordre (1ère, 2ème, ...).
+  // Compte le nombre de demandes par nom (les participants voulant plusieurs
+  // cours par semaine remplissent le formulaire une fois par cours souhaité)
+  // et attribue à chaque demande son numéro d'ordre (1ère, 2ème, ...).
   const { countByName, indexById } = useMemo(() => {
     const counts = {};
     students.forEach(s => {
@@ -87,12 +87,12 @@ export default function AdminEleves({ students, profs, onChanged }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>Élèves ({students.length})</h2>
-        <input placeholder="Rechercher un élève..." value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 220 }} />
+        <h2 style={{ margin: 0 }}>Participants ({students.length})</h2>
+        <input placeholder="Rechercher..." value={filter} onChange={e => setFilter(e.target.value)} style={{ width: 220 }} />
       </div>
 
       {filtered.length === 0 && (
-        <Card><p style={{ color: 'var(--text-secondary)', margin: 0 }}>Aucun élève pour l'instant. Partagez le lien du formulaire aux parents.</p></Card>
+        <Card><p style={{ color: 'var(--text-secondary)', margin: 0 }}>Aucune inscription pour l'instant. Partagez le lien du formulaire.</p></Card>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -136,7 +136,7 @@ export default function AdminEleves({ students, profs, onChanged }) {
                   </p>
                 )}
               </div>
-              <button onClick={() => removeStudent(s.id)} style={{ padding: '4px 8px' }} aria-label="Supprimer l'élève">
+              <button onClick={() => removeStudent(s.id)} style={{ padding: '4px 8px' }} aria-label="Supprimer cette inscription">
                 <i className="ti ti-trash" style={{ fontSize: 16 }}></i>
               </button>
             </div>
@@ -165,7 +165,7 @@ export default function AdminEleves({ students, profs, onChanged }) {
 
 // Affiche un nom saisi par un parent, avec une alerte visuelle si ce nom ne
 // correspond (même approximativement) à personne de connu dans le système
-// (aucun prof de ce nom, ou aucun autre élève de ce nom).
+// (aucun prof de ce nom, ou aucune autre personne inscrite de ce nom).
 function NameWithAlert({ name, knownNames, excludeSelf, isLast }) {
   const relevantNames = excludeSelf ? knownNames.filter(n => normName(n) !== normName(excludeSelf)) : knownNames;
   const quality = matchQuality(name, relevantNames);

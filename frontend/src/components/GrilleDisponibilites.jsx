@@ -7,7 +7,7 @@ function cellKey(jour, heure) {
   return `${jour}|${heure}`;
 }
 
-// Grille cliquable jour × heure pour saisir les disponibilités d'un élève.
+// Grille cliquable jour × heure pour saisir les disponibilités d'un participant.
 // value : tableau de { jour, heure }. onChange : appelé avec le nouveau tableau.
 // Le glisser-cliquer permet de cocher/décocher plusieurs cases d'affilée.
 export default function GrilleDisponibilites({ value, onChange }) {
@@ -99,7 +99,7 @@ export default function GrilleDisponibilites({ value, onChange }) {
         </tbody>
       </table>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-        Cliquez (ou glissez) sur les créneaux d'une heure où votre enfant est disponible.
+        Cliquez (ou glissez) sur les créneaux d'une heure où la personne est disponible.
       </p>
     </div>
   );

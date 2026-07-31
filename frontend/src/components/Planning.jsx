@@ -47,7 +47,7 @@ export default function Planning({ students, profs, courts, planning, onChanged 
   const toggleStudentInBlock = async (block, studentId) => {
     const has = block.studentIds.includes(studentId);
     if (!has) {
-      // On ajoute cet élève : vérifier s'il est déjà pris ailleurs au même
+      // On ajoute ce participant : vérifier s'il est déjà pris ailleurs au même
       // jour/horaire (un autre bloc du planning, hors celui-ci).
       const conflictingBlock = planning.find(b =>
         b.id !== block.id &&
@@ -57,7 +57,7 @@ export default function Planning({ students, profs, courts, planning, onChanged 
         b.studentIds.includes(studentId)
       );
       if (conflictingBlock) {
-        const studentName = studentsById[studentId]?.name || 'Cet élève';
+        const studentName = studentsById[studentId]?.name || 'Cette personne';
         const confirmed = window.confirm(
           `${studentName} est déjà prévu ${block.jour} ${block.debut}–${block.fin} sur un autre cours. Voulez-vous quand même l'ajouter ici (il sera alors sur deux cours en même temps) ?`
         );
@@ -128,7 +128,7 @@ export default function Planning({ students, profs, courts, planning, onChanged 
 
       {!canGenerate && (
         <Card><p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-          Il faut au moins un élève, un professeur avec ses horaires, un terrain avec ses créneaux pour générer une proposition.
+          Il faut au moins un participant inscrit, un professeur avec ses horaires, un terrain avec ses créneaux pour générer une proposition.
         </p></Card>
       )}
 
@@ -151,7 +151,7 @@ export default function Planning({ students, profs, courts, planning, onChanged 
 
       {lastResult && lastResult.conflicts?.length > 0 && (
         <Card style={{ marginBottom: 14, background: 'var(--warning-bg)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 14, color: 'var(--warning-text)' }}>À trancher : créneaux avec plusieurs élèves possibles</p>
+          <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 14, color: 'var(--warning-text)' }}>À trancher : créneaux avec plusieurs participants possibles</p>
           {lastResult.conflicts.map((c, i) => (
             <p key={i} style={{ margin: '2px 0 8px', fontSize: 13, color: 'var(--warning-text)' }}>
               {c.jour} {c.debut}–{c.fin} avec {c.profName} : retenu(s) {c.placedNames.join(', ')} — également disponible(s) et non retenu(s) : {c.rejectedNames.join(', ')}. Modifiez le cours ci-dessous si vous préférez un autre choix.
@@ -180,9 +180,9 @@ export default function Planning({ students, profs, courts, planning, onChanged 
 
       {planning.length > 0 && (
         <Card>
-          <h3 style={{ marginTop: 0, fontSize: 16 }}>Élèves non casés ({unplacedStudents.length})</h3>
+          <h3 style={{ marginTop: 0, fontSize: 16 }}>Participants non casés ({unplacedStudents.length})</h3>
           {unplacedStudents.length === 0 ? (
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>Tous les élèves ont un créneau.</p>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>Tous les participants ont un créneau.</p>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {unplacedStudents.map(s => (
@@ -234,13 +234,13 @@ function PlanningBlock({ block, studentsById, allStudents, onRemove, onToggleStu
             </button>
           </span>
         ))}
-        {blockStudents.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun élève</span>}
+        {blockStudents.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun participant</span>}
       </div>
 
       <div style={{ marginTop: 10 }}>
         {!showAddStudent ? (
           <button onClick={() => setShowAddStudent(true)} style={{ fontSize: 13, padding: '4px 10px' }}>
-            <i className="ti ti-plus" style={{ fontSize: 13, marginRight: 4 }}></i>Ajouter un élève
+            <i className="ti ti-plus" style={{ fontSize: 13, marginRight: 4 }}></i>Ajouter un participant
           </button>
         ) : (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -249,7 +249,7 @@ function PlanningBlock({ block, studentsById, allStudents, onRemove, onToggleStu
               onChange={e => { if (e.target.value) { onToggleStudent(e.target.value); setShowAddStudent(false); } }}
               style={{ fontSize: 13 }}
             >
-              <option value="" disabled>Choisir un élève...</option>
+              <option value="" disabled>Choisir un participant...</option>
               {notInBlock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <button onClick={() => setShowAddStudent(false)} style={{ fontSize: 13, padding: '4px 8px' }}>Annuler</button>

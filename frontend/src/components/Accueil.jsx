@@ -5,7 +5,7 @@ export default function Accueil({ setTab, students, profs, courts }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ display: 'flex', gap: 12 }}>
-        <StatCard label="Élèves inscrits" value={students.length} />
+        <StatCard label="Participants inscrits" value={students.length} />
         <StatCard label="Professeurs" value={profs.length} />
         <StatCard label="Terrains" value={courts.length} />
       </div>
@@ -13,10 +13,10 @@ export default function Accueil({ setTab, students, profs, courts }) {
       <Card>
         <h2 style={{ marginTop: 0 }}>Comment ça marche</h2>
         <ol style={{ fontSize: 15, lineHeight: 1.8, paddingLeft: 20, color: 'var(--text-secondary)' }}>
-          <li>Partagez le lien de ce site sur le groupe WhatsApp des parents, en leur demandant d'aller dans l'onglet <b style={{ color: 'var(--text-primary)' }}>Formulaire élève</b> pour chaque enfant inscrit.</li>
+          <li>Partagez le lien de ce site sur le groupe WhatsApp du club, en demandant à chacun d'aller dans l'onglet <b style={{ color: 'var(--text-primary)' }}>Formulaire</b> pour chaque cours souhaité.</li>
           <li>Renseignez dans <b style={{ color: 'var(--text-primary)' }}>Terrains</b> les créneaux que le professeur vous communique comme disponibles.</li>
           <li>Renseignez dans <b style={{ color: 'var(--text-primary)' }}>Professeurs</b> les horaires de chaque professeur.</li>
-          <li>Dans <b style={{ color: 'var(--text-primary)' }}>Élèves</b>, complétez le niveau étoile de chaque élève (pas rempli par les parents).</li>
+          <li>Dans <b style={{ color: 'var(--text-primary)' }}>Participants</b>, complétez le niveau étoile de chacun (pas rempli via le formulaire).</li>
           <li>Allez dans <b style={{ color: 'var(--text-primary)' }}>Planning</b> pour générer une proposition, puis ajustez-la à la main si besoin.</li>
           <li>Utilisez <b style={{ color: 'var(--text-primary)' }}>Vue par prof</b> pour envoyer à chaque professeur son planning.</li>
         </ol>

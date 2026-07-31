@@ -5,7 +5,7 @@ import GrilleDisponibilites from './GrilleDisponibilites.jsx';
 
 // Échelle des classements belges (AFT / Tennis Padel Wallonie-Bruxelles), du
 // plus faible au plus fort, telle qu'affichée dans le formulaire. "Non
-// classé" est la valeur par défaut pour les élèves qui n'ont jamais participé
+// classé" est la valeur par défaut pour les participants qui n'ont jamais participé
 // à une compétition officielle.
 const CLASSEMENT_OPTIONS = [
   { value: '', label: 'Non classé' },
@@ -83,9 +83,9 @@ export default function FormulaireEleve({ onCreated }) {
   return (
     <div style={{ maxWidth: 560, margin: '0 auto' }}>
       <Card>
-        <h2 style={{ marginTop: 0 }}>Inscription d'un élève</h2>
+        <h2 style={{ marginTop: 0 }}>Inscription à un cours</h2>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: -8, marginBottom: 20 }}>
-          Si votre enfant souhaite plusieurs cours par semaine (par exemple un cours en groupe et un cours individuel), remplissez ce formulaire une fois pour chaque cours souhaité.
+          Si plusieurs cours par semaine sont souhaités (par exemple un cours en groupe et un cours individuel), remplissez ce formulaire une fois pour chaque cours souhaité.
         </p>
 
         {submitted && (
@@ -100,7 +100,7 @@ export default function FormulaireEleve({ onCreated }) {
         )}
 
         <form onSubmit={submit}>
-          <TextField label="Nom de l'élève" value={name} onChange={setName} placeholder="Prénom et nom" />
+          <TextField label="Nom" value={name} onChange={setName} placeholder="Prénom et nom" />
           <TextField label="Âge" value={age} onChange={setAge} placeholder="Ex : 11" />
           <SelectField
             label="Classement officiel"
@@ -128,10 +128,10 @@ export default function FormulaireEleve({ onCreated }) {
           />
 
           <TextField
-            label="Souhaite un terrain à côté de (frère/sœur, facultatif)"
+            label="Souhaite un terrain à côté de (facultatif)"
             value={terrainAdjacentAvec}
             onChange={setTerrainAdjacentAvec}
-            placeholder="Nom du frère ou de la sœur"
+            placeholder="Nom de la personne (ex : frère, sœur, conjoint...)"
           />
 
           <TextField

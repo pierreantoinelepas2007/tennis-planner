@@ -2,8 +2,8 @@ import React from 'react';
 
 const TABS = [
   { id: 'accueil', label: 'Accueil', icon: 'ti-home' },
-  { id: 'formulaire', label: 'Formulaire élève', icon: 'ti-clipboard-list' },
-  { id: 'admin-eleves', label: 'Élèves', icon: 'ti-users' },
+  { id: 'formulaire', label: 'Formulaire', icon: 'ti-clipboard-list' },
+  { id: 'admin-eleves', label: 'Participants', icon: 'ti-users' },
   { id: 'admin-profs', label: 'Professeurs', icon: 'ti-user' },
   { id: 'admin-terrains', label: 'Terrains', icon: 'ti-square' },
   { id: 'planning', label: 'Planning', icon: 'ti-calendar' },
