@@ -201,6 +201,21 @@ function generatePlanningProposal(students, profs, courts, slots) {
   // elle a demandé plusieurs cours par semaine (plusieurs soumissions du formulaire).
   const daysUsedByName = {};
 
+  // Pour les élèves ayant plusieurs demandes de cours (même nom, plusieurs
+  // entrées dans `students`), on calcule à l'avance le nombre de jours
+  // distincts disponibles au total pour ce nom. Si une demande de cours (par
+  // exemple un groupe réciproque en phase 1) n'a qu'une seule journée
+  // possible en commun avec les autres demandes du même nom, cette
+  // information permet d'éviter de "gâcher" ce jour rare sur un autre besoin
+  // moins contraint. Concrètement : on compte, par nom, les jours disponibles
+  // pour CHAQUE demande séparée, pour repérer les jours "rares" à préserver.
+  const namesSeen = {};
+  students.forEach(s => {
+    const key = norm(s.name);
+    namesSeen[key] = (namesSeen[key] || 0) + 1;
+  });
+  const multiDemandNames = new Set(Object.keys(namesSeen).filter(k => namesSeen[k] > 1));
+
   const scoreProf = (s, prof) => s.prof_prefere && namesMatch(prof.name, s.prof_prefere) ? 3 : 0;
 
   const wantsToPlayWith = (a, b) =>
@@ -220,6 +235,17 @@ function generatePlanningProposal(students, profs, courts, slots) {
     }
     if (a.niveau_etoile == null || b.niveau_etoile == null) return true;
     return Math.abs(a.niveau_etoile - b.niveau_etoile) <= 1;
+  };
+
+  // Jours où `student` est disponible, en excluant les jours déjà retenus
+  // pour une autre de ses demandes de cours (pertinent seulement s'il a
+  // plusieurs demandes, sinon retourne simplement tous ses jours dispo).
+  const availableDaysFor = (student) => {
+    const days = new Set();
+    JOURS.forEach(jour => {
+      if (studentAvailableForSlot(student, jour, '00:00', '23:59')) days.add(jour);
+    });
+    return days;
   };
 
   // ---------- Phase 1 : priorité aux groupes réciproques "veut jouer avec" ----------
@@ -264,9 +290,11 @@ function generatePlanningProposal(students, profs, courts, slots) {
     // et où ni le terrain ni le prof ne sont déjà réservés à ce moment par un
     // groupe réciproque traité juste avant (dans cette même phase 1).
     const candidateSlots = possibleSlots.filter(({ slot, prof }) => {
-      const key0 = norm(members[0].name);
-      const usedDays0 = daysUsedByName[key0];
-      if (usedDays0 && usedDays0.has(slot.jour)) return false;
+      const dayAlreadyUsedByAMember = members.some(m => {
+        const usedDays = daysUsedByName[norm(m.name)];
+        return usedDays && usedDays.has(slot.jour);
+      });
+      if (dayAlreadyUsedByAMember) return false;
       const courtTaken = result.some(r =>
         r.courtId === slot.court_id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
       );
@@ -282,7 +310,30 @@ function generatePlanningProposal(students, profs, courts, slots) {
     const scored = candidateSlots.map(({ slot, prof }) => {
       const stabilityBonus = lastCourtForProf[prof.id] === slot.court_id ? 2 : 0;
       const profScore = members.reduce((acc, m) => acc + scoreProf(m, prof), 0);
-      return { slot, prof, score: profScore + stabilityBonus };
+      // Pénalité si ce jour est aussi utile (voire indispensable) à une autre
+      // demande de cours non encore traitée du même nom qu'un des membres
+      // (élève ayant demandé plusieurs cours par semaine). On regarde combien
+      // de jours alternatifs restent disponibles pour cette autre demande :
+      // moins il y en a, plus la pénalité est forte, pour préserver ce jour
+      // rare à l'autre demande plutôt que de le "gâcher" ici s'il existe une
+      // meilleure option pour ce groupe.
+      let otherDemandPenalty = 0;
+      members.forEach(m => {
+        const key = norm(m.name);
+        if (!multiDemandNames.has(key)) return;
+        const otherEntries = students.filter(s2 =>
+          norm(s2.name) === key && s2.id !== m.id && unplaced.has(s2.id)
+        );
+        otherEntries.forEach(other => {
+          const otherDays = availableDaysFor(other);
+          if (otherDays.has(slot.jour)) {
+            // Ce jour compte pour l'autre demande : pénalité inversement
+            // proportionnelle au nombre de jours alternatifs qu'elle a.
+            otherDemandPenalty += Math.max(0, 6 - otherDays.size);
+          }
+        });
+      });
+      return { slot, prof, score: profScore + stabilityBonus - otherDemandPenalty };
     });
     scored.sort((a, b) => b.score - a.score);
     const best = scored[0];
