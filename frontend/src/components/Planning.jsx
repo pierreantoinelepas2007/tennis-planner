@@ -108,6 +108,17 @@ export default function Planning({ students, profs, courts, planning, onChanged 
         </Card>
       )}
 
+      {lastResult && lastResult.conflicts?.length > 0 && (
+        <Card style={{ marginBottom: 14, background: 'var(--warning-bg)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 14, color: 'var(--warning-text)' }}>À trancher : créneaux avec plusieurs élèves possibles</p>
+          {lastResult.conflicts.map((c, i) => (
+            <p key={i} style={{ margin: '2px 0 8px', fontSize: 13, color: 'var(--warning-text)' }}>
+              {c.jour} {c.debut}–{c.fin} avec {c.profName} : retenu(s) {c.placedNames.join(', ')} — également disponible(s) et non retenu(s) : {c.rejectedNames.join(', ')}. Modifiez le cours ci-dessous si vous préférez un autre choix.
+            </p>
+          ))}
+        </Card>
+      )}
+
       {sortedPlanning.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
           {sortedPlanning.map(b => (

@@ -260,6 +260,7 @@ app.post('/api/planning/generate', async (req, res) => {
       blocksCount: proposal.blocks.length,
       unplacedStudents,
       siblingHints: proposal.siblingHints,
+      conflicts: proposal.conflicts,
     });
   } catch (e) {
     console.error(e);

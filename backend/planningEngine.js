@@ -117,6 +117,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
   const unplaced = new Set(students.map(s => s.id));
   const result = [];
   const lastCourtForProf = {};
+  const conflicts = [];
   // Jours déjà utilisés par personne (regroupée par nom normalisé), pour éviter
   // de placer deux demandes de cours de la même personne le même jour quand
   // elle a demandé plusieurs cours par semaine (plusieurs soumissions du formulaire).
@@ -183,6 +184,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
     const stabilityBonus = lastCourtForProf[prof.id] === slot.court_id ? 2 : 0;
     groups.sort((a, b) => b.score - a.score);
     const chosen = groups[0];
+    const rejectedGroups = groups.slice(1);
 
     chosen.members.forEach(m => {
       unplaced.delete(m.id);
@@ -201,6 +203,22 @@ function generatePlanningProposal(students, profs, courts, slots) {
       score: chosen.score + stabilityBonus,
     });
     lastCourtForProf[prof.id] = slot.court_id;
+
+    // Un vrai conflit : d'autres élèves étaient disponibles et candidats sur ce
+    // même créneau/prof mais n'ont pas pu être regroupés avec les retenus
+    // (préférence individuel, niveau trop éloigné, pas de réciprocité). Ils
+    // restent dans le bassin "unplaced" et seront réexaminés sur d'autres
+    // créneaux, mais on signale ce choix pour que le prof puisse arbitrer.
+    if (rejectedGroups.length > 0) {
+      conflicts.push({
+        jour: slot.jour,
+        debut: slot.debut,
+        fin: slot.fin,
+        profName: prof.name,
+        placedNames: chosen.members.map(m => m.name),
+        rejectedNames: rejectedGroups.flatMap(g => g.members.map(m => m.name)),
+      });
+    }
   });
 
   const siblingHints = [];
@@ -222,6 +240,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
     blocks: result,
     unplacedIds: Array.from(unplaced),
     siblingHints,
+    conflicts,
   };
 }
 
