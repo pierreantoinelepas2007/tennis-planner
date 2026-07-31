@@ -75,7 +75,7 @@ export default function AdminEleves({ students, profs, onChanged }) {
                   )}
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {s.classement ? `Classé : ${s.classement}` : 'Non classé'}
+                  {s.classement && s.classement !== 'Non classé' ? `Classé : ${s.classement}` : 'Non classé'}
                   {' · '}
                   {s.preferenceGroupe === 'groupe' ? 'Préfère groupe' : s.preferenceGroupe === 'individuel' ? 'Préfère individuel' : 'Indifférent'}
                 </p>

@@ -2,6 +2,38 @@ import React, { useState } from 'react';
 import { Card, TextField, SelectField } from './Common.jsx';
 import { api } from '../api.js';
 
+// Échelle des classements belges (AFT / Tennis Padel Wallonie-Bruxelles), du
+// plus faible au plus fort, telle qu'affichée dans le formulaire. "Non
+// classé" est la valeur par défaut pour les élèves qui n'ont jamais participé
+// à une compétition officielle.
+const CLASSEMENT_OPTIONS = [
+  { value: '', label: 'Non classé' },
+  { value: 'C30.6', label: 'C30.6' },
+  { value: 'C30.5', label: 'C30.5' },
+  { value: 'C30.4', label: 'C30.4' },
+  { value: 'C30.3', label: 'C30.3' },
+  { value: 'C30.2', label: 'C30.2' },
+  { value: 'C30.1', label: 'C30.1' },
+  { value: 'C30', label: 'C30' },
+  { value: 'C15.5', label: 'C15.5' },
+  { value: 'C15.4', label: 'C15.4' },
+  { value: 'C15.3', label: 'C15.3' },
+  { value: 'C15.2', label: 'C15.2' },
+  { value: 'C15.1', label: 'C15.1' },
+  { value: 'C15', label: 'C15' },
+  { value: 'B+4/6', label: 'B+4/6' },
+  { value: 'B+2/6', label: 'B+2/6' },
+  { value: 'B0', label: 'B0' },
+  { value: 'B-2/6', label: 'B-2/6' },
+  { value: 'B-4/6', label: 'B-4/6' },
+  { value: 'B-15', label: 'B-15' },
+  { value: 'B-15.1', label: 'B-15.1' },
+  { value: 'B-15.2', label: 'B-15.2' },
+  { value: 'B-15.4', label: 'B-15.4' },
+  { value: 'A national', label: 'A national' },
+  { value: 'A international', label: 'A international' },
+];
+
 export default function FormulaireEleve({ onCreated }) {
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
@@ -29,7 +61,7 @@ export default function FormulaireEleve({ onCreated }) {
       await api.createStudent({
         name: name.trim(),
         age: age.trim(),
-        classement: classement.trim(),
+        classement: classement || 'Non classé',
         preferenceGroupe: preference,
         jouerAvec: jouerAvec.split(',').map(s => s.trim()).filter(Boolean),
         terrainAdjacentAvec: terrainAdjacentAvec.trim(),
@@ -69,7 +101,12 @@ export default function FormulaireEleve({ onCreated }) {
         <form onSubmit={submit}>
           <TextField label="Nom de l'élève" value={name} onChange={setName} placeholder="Prénom et nom" />
           <TextField label="Âge" value={age} onChange={setAge} placeholder="Ex : 11" />
-          <TextField label="Classement officiel (si l'élève est classé)" value={classement} onChange={setClassement} placeholder="Ex : 30/1, ou laisser vide si non classé" />
+          <SelectField
+            label="Classement officiel"
+            value={classement}
+            onChange={setClassement}
+            options={CLASSEMENT_OPTIONS}
+          />
 
           <SelectField
             label="Préférence"

@@ -46,6 +46,24 @@ export default function Planning({ students, profs, courts, planning, onChanged 
 
   const toggleStudentInBlock = async (block, studentId) => {
     const has = block.studentIds.includes(studentId);
+    if (!has) {
+      // On ajoute cet élève : vérifier s'il est déjà pris ailleurs au même
+      // jour/horaire (un autre bloc du planning, hors celui-ci).
+      const conflictingBlock = planning.find(b =>
+        b.id !== block.id &&
+        b.jour === block.jour &&
+        b.debut === block.debut &&
+        b.fin === block.fin &&
+        b.studentIds.includes(studentId)
+      );
+      if (conflictingBlock) {
+        const studentName = studentsById[studentId]?.name || 'Cet élève';
+        const confirmed = window.confirm(
+          `${studentName} est déjà prévu ${block.jour} ${block.debut}–${block.fin} sur un autre cours. Voulez-vous quand même l'ajouter ici (il sera alors sur deux cours en même temps) ?`
+        );
+        if (!confirmed) return;
+      }
+    }
     const nextIds = has ? block.studentIds.filter(id => id !== studentId) : [...block.studentIds, studentId];
     try {
       await api.updatePlanningBlock(block.id, { studentIds: nextIds });
@@ -75,6 +93,29 @@ export default function Planning({ students, profs, courts, planning, onChanged 
   const placedIds = new Set(planning.flatMap(b => b.studentIds));
   const unplacedStudents = students.filter(s => !placedIds.has(s.id));
 
+  // Alertes fratrie recalculées en direct à partir de l'état actuel du planning
+  // (contrairement à lastResult.siblingHints, figé au moment de la dernière
+  // génération automatique), pour rester à jour après une modification manuelle.
+  const liveSiblingHints = useMemo(() => {
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const findByName = (name) => students.find(s => norm(s.name) === norm(name));
+    const hints = [];
+    students.forEach(s => {
+      if (!s.terrainAdjacentAvec) return;
+      const sibling = findByName(s.terrainAdjacentAvec);
+      if (!sibling) return;
+      const sBlock = planning.find(b => b.studentIds.includes(s.id));
+      const sibBlock = planning.find(b => b.studentIds.includes(sibling.id));
+      if (sBlock && sibBlock && sBlock.jour === sibBlock.jour) {
+        const gap = Math.abs(timeToMinutes(sBlock.debut) - timeToMinutes(sibBlock.debut));
+        if (sBlock.courtId !== sibBlock.courtId && gap <= 60) {
+          hints.push({ a: s.name, b: sibling.name });
+        }
+      }
+    });
+    return hints;
+  }, [planning, students]);
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -97,10 +138,10 @@ export default function Planning({ students, profs, courts, planning, onChanged 
         </Card>
       )}
 
-      {lastResult && lastResult.siblingHints?.length > 0 && (
+      {liveSiblingHints.length > 0 && (
         <Card style={{ marginBottom: 14, background: 'var(--warning-bg)' }}>
           <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 14, color: 'var(--warning-text)' }}>À vérifier : terrains non côte à côte</p>
-          {lastResult.siblingHints.map((h, i) => (
+          {liveSiblingHints.map((h, i) => (
             <p key={i} style={{ margin: '2px 0', fontSize: 13, color: 'var(--warning-text)' }}>
               {h.a} et {h.b} jouent le même jour à des horaires proches mais pas sur des terrains adjacents. Vérifiez l'attribution des terrains.
             </p>
