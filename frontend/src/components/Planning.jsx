@@ -111,24 +111,28 @@ export default function Planning({ students, profs, courts, planning, onChanged 
   const placedIds = new Set(planning.flatMap(b => b.studentIds));
   const unplacedStudents = students.filter(s => !placedIds.has(s.id));
 
-  // Alertes fratrie recalculées en direct à partir de l'état actuel du planning
-  // (contrairement à lastResult.siblingHints, figé au moment de la dernière
-  // génération automatique), pour rester à jour après une modification manuelle.
-  const liveSiblingHints = useMemo(() => {
+  // Alertes "même horaire" recalculées en direct à partir de l'état actuel du
+  // planning (contrairement à lastResult.sameScheduleUnresolved, figé au
+  // moment de la dernière génération automatique), pour rester à jour après
+  // une modification manuelle. Signale les paires dont l'horaire diffère.
+  const liveSameScheduleHints = useMemo(() => {
     const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     const findByName = (name) => students.find(s => norm(s.name) === norm(name));
     const hints = [];
+    const seenPairs = new Set();
     students.forEach(s => {
-      if (!s.terrainAdjacentAvec) return;
-      const sibling = findByName(s.terrainAdjacentAvec);
-      if (!sibling) return;
+      if (!s.memeHoraireAvec) return;
+      const partner = findByName(s.memeHoraireAvec);
+      if (!partner) return;
+      const pairKey = [norm(s.name), norm(partner.name)].sort().join('|');
+      if (seenPairs.has(pairKey)) return;
+      seenPairs.add(pairKey);
       const sBlock = planning.find(b => b.studentIds.includes(s.id));
-      const sibBlock = planning.find(b => b.studentIds.includes(sibling.id));
-      if (sBlock && sibBlock && sBlock.jour === sibBlock.jour) {
-        const gap = Math.abs(timeToMinutes(sBlock.debut) - timeToMinutes(sibBlock.debut));
-        if (sBlock.courtId !== sibBlock.courtId && gap <= 60) {
-          hints.push({ a: s.name, b: sibling.name });
-        }
+      const pBlock = planning.find(b => b.studentIds.includes(partner.id));
+      if (!sBlock || !pBlock) return; // l'un des deux n'a pas encore de cours, rien à signaler
+      const sameSchedule = sBlock.jour === pBlock.jour && sBlock.debut === pBlock.debut;
+      if (!sameSchedule) {
+        hints.push({ a: s.name, b: partner.name });
       }
     });
     return hints;
@@ -156,12 +160,12 @@ export default function Planning({ students, profs, courts, planning, onChanged 
         </Card>
       )}
 
-      {liveSiblingHints.length > 0 && (
+      {liveSameScheduleHints.length > 0 && (
         <Card style={{ marginBottom: 14, background: 'var(--warning-bg)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 14, color: 'var(--warning-text)' }}>À vérifier : terrains non côte à côte</p>
-          {liveSiblingHints.map((h, i) => (
+          <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: 14, color: 'var(--warning-text)' }}>À vérifier : horaires différents</p>
+          {liveSameScheduleHints.map((h, i) => (
             <p key={i} style={{ margin: '2px 0', fontSize: 13, color: 'var(--warning-text)' }}>
-              {h.a} et {h.b} jouent le même jour à des horaires proches mais pas sur des terrains adjacents. Vérifiez l'attribution des terrains.
+              {h.a} et {h.b} souhaitaient le même horaire mais sont actuellement sur des créneaux différents. Ajustez si possible.
             </p>
           ))}
         </Card>

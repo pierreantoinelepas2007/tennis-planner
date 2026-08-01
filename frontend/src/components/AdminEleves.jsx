@@ -120,9 +120,9 @@ export default function AdminEleves({ students, profs, onChanged }) {
                     ))}
                   </p>
                 )}
-                {s.terrainAdjacentAvec && (
+                {s.memeHoraireAvec && (
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Terrain à côté de : <NameWithAlert name={s.terrainAdjacentAvec} knownNames={studentNames} excludeSelf={s.name} isLast />
+                    Même horaire que : <NameWithAlert name={s.memeHoraireAvec} knownNames={studentNames} excludeSelf={s.name} isLast />
                   </p>
                 )}
                 {s.profPrefere && (

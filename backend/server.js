@@ -29,7 +29,7 @@ app.get('/api/students', async (req, res) => {
       niveauEtoile: r.niveau_etoile,
       preferenceGroupe: r.preference_groupe,
       jouerAvec: r.jouer_avec || [],
-      terrainAdjacentAvec: r.terrain_adjacent_avec,
+      memeHoraireAvec: r.terrain_adjacent_avec,
       profPrefere: r.prof_prefere,
       disponibilites: dispoRows.filter(d => d.student_id === r.id).map(d => ({ jour: d.jour, heure: d.heure })),
     }));
@@ -51,7 +51,7 @@ app.post('/api/students', async (req, res) => {
       `INSERT INTO students (id, name, age, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [id, b.name.trim(), b.age || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
-        JSON.stringify(b.jouerAvec || []), b.terrainAdjacentAvec || null, b.profPrefere || null]
+        JSON.stringify(b.jouerAvec || []), b.memeHoraireAvec || null, b.profPrefere || null]
     );
     const disponibilites = Array.isArray(b.disponibilites) ? b.disponibilites : [];
     for (const d of disponibilites) {
@@ -268,6 +268,7 @@ app.post('/api/planning/generate', async (req, res) => {
       .map(s => ({
         ...s,
         jouer_avec: s.jouer_avec || [],
+        meme_horaire_avec: s.terrain_adjacent_avec,
         disponibilites: studentDispoRows.filter(d => d.student_id === s.id),
       }));
     const profs = profRows.map(p => ({
@@ -302,7 +303,7 @@ app.post('/api/planning/generate', async (req, res) => {
     res.json({
       blocksCount: proposal.blocks.length,
       unplacedStudents,
-      siblingHints: proposal.siblingHints,
+      sameScheduleUnresolved: proposal.sameScheduleUnresolved,
       conflicts: proposal.conflicts,
       lockedBlocksKept: lockedBlocks.length,
     });

@@ -187,9 +187,14 @@ function generatePlanningProposal(students, profs, courts, slots) {
   // différents) — cette relation est distincte de "veut jouer avec" et ne
   // doit jamais les faire fusionner dans le même cours, même si leur niveau
   // est proche par ailleurs.
-  const isSiblingLinked = (a, b) =>
-    namesMatch(a.terrain_adjacent_avec || '', b.name) ||
-    namesMatch(b.terrain_adjacent_avec || '', a.name);
+  // Deux personnes liées par "même horaire que" ont explicitement demandé
+  // des cours SÉPARÉS mais au même horaire (ex: deux parents qui viennent
+  // ensemble) — cette relation est distincte de "veut jouer avec" et ne doit
+  // jamais les faire fusionner dans le même cours, même si leur niveau est
+  // proche par ailleurs.
+  const isSameScheduleLinked = (a, b) =>
+    namesMatch(a.meme_horaire_avec || '', b.name) ||
+    namesMatch(b.meme_horaire_avec || '', a.name);
 
   // Deux élèves sont de niveau proche si leurs classements officiels (quand
   // les deux en ont un reconnu) sont à 2 échelons d'écart maximum sur
@@ -237,7 +242,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       changed = false;
       for (const candidate of groupable) {
         if (visited.has(candidate.id)) continue;
-        if (members.some(m => wantsToPlayWith(m, candidate)) && members.every(m => levelClose(m, candidate)) && members.every(m => !isSiblingLinked(m, candidate))) {
+        if (members.some(m => wantsToPlayWith(m, candidate)) && members.every(m => levelClose(m, candidate)) && members.every(m => !isSameScheduleLinked(m, candidate))) {
           members.push(candidate);
           visited.add(candidate.id);
           changed = true;
@@ -323,11 +328,91 @@ function generatePlanningProposal(students, profs, courts, slots) {
     lastCourtForProf[best.prof.id] = best.slot.court_id;
   });
 
-  // ---------- Phase 2 : priorité aux préférences de professeur ----------
-  // Pour les élèves restants (non casés en phase 1) qui ont exprimé une
+  // ---------- Phase 2 : priorité aux paires "même horaire que" ----------
+  // Deux personnes qui souhaitent le même horaire (sans forcément jouer
+  // ensemble ni être sur des terrains adjacents — par exemple deux parents
+  // qui viennent ensemble) doivent être sur des cours SÉPARÉS, mais on
+  // cherche activement à les caser sur le même créneau horaire, avant de les
+  // laisser au hasard de l'ordre des créneaux en phase 4.
+  const sameScheduleUnresolved = [];
+  const processedSchedulePairs = new Set();
+
+  // Regroupe les créneaux possibles par (jour, début, fin), pour examiner
+  // chaque horaire une seule fois plutôt que de reconstruire artificiellement
+  // une grille 0h-24h indépendante des vrais créneaux du club.
+  const slotsByTime = {};
+  possibleSlots.forEach(entry => {
+    const key = `${entry.slot.jour}|${entry.slot.debut}|${entry.slot.fin}`;
+    if (!slotsByTime[key]) slotsByTime[key] = [];
+    slotsByTime[key].push(entry);
+  });
+  const timeKeysSorted = Object.keys(slotsByTime).sort((a, b) => {
+    const [jourA, debutA] = a.split('|');
+    const [jourB, debutB] = b.split('|');
+    if (jourA !== jourB) return JOURS.indexOf(jourA) - JOURS.indexOf(jourB);
+    return timeToMinutes(debutA) - timeToMinutes(debutB);
+  });
+
+  const isSlotFree = (slot, prof) =>
+    !result.some(r => r.courtId === slot.court_id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin) &&
+    !result.some(r => r.profId === prof.id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin);
+
+  students.forEach(s => {
+    if (!unplaced.has(s.id)) return;
+    if (!s.meme_horaire_avec) return;
+    const partner = findStudentByName(students, s.meme_horaire_avec);
+    if (!partner || !unplaced.has(partner.id)) return;
+    const pairKey = [s.id, partner.id].sort().join('|');
+    if (processedSchedulePairs.has(pairKey)) return;
+    processedSchedulePairs.add(pairKey);
+
+    let placed = false;
+    for (const timeKey of timeKeysSorted) {
+      const [jour] = timeKey.split('|');
+      const usedDaysS = daysUsedByName[norm(s.name)];
+      if (usedDaysS && usedDaysS.has(jour)) continue;
+      const usedDaysP = daysUsedByName[norm(partner.name)];
+      if (usedDaysP && usedDaysP.has(jour)) continue;
+
+      const entriesHere = slotsByTime[timeKey].filter(({ slot, prof }) => isSlotFree(slot, prof));
+      const sEntry = entriesHere.find(({ slot, prof }) => studentAvailableForSlot(s, slot.jour, slot.debut, slot.fin));
+      if (!sEntry) continue;
+      const pEntry = entriesHere.find(({ slot, prof }) =>
+        slot.court_id !== sEntry.slot.court_id && prof.id !== sEntry.prof.id &&
+        studentAvailableForSlot(partner, slot.jour, slot.debut, slot.fin)
+      );
+      if (!pEntry) continue;
+
+      [{ student: s, entry: sEntry }, { student: partner, entry: pEntry }].forEach(({ student, entry }) => {
+        unplaced.delete(student.id);
+        const key = norm(student.name);
+        if (!daysUsedByName[key]) daysUsedByName[key] = new Set();
+        daysUsedByName[key].add(entry.slot.jour);
+        result.push({
+          slotId: entry.slot.id,
+          courtId: entry.slot.court_id,
+          profId: entry.prof.id,
+          jour: entry.slot.jour,
+          debut: entry.slot.debut,
+          fin: entry.slot.fin,
+          studentIds: [student.id],
+          score: 9,
+        });
+        lastCourtForProf[entry.prof.id] = entry.slot.court_id;
+      });
+      placed = true;
+      break;
+    }
+    if (!placed) {
+      sameScheduleUnresolved.push({ a: s.name, b: partner.name });
+    }
+  });
+
+  // ---------- Phase 3 : priorité aux préférences de professeur ----------
+  // Pour les élèves restants (non casés en phase 1 ou 2) qui ont exprimé une
   // préférence de professeur reconnue, on cherche activement le meilleur
   // créneau disponible avec CE prof précis, avant de les laisser au hasard de
-  // l'ordre des créneaux en phase 3. Sans cette étape, un élève peut se faire
+  // l'ordre des créneaux en phase 4. Sans cette étape, un élève peut se faire
   // caser avec un autre prof simplement parce que son créneau était examiné
   // en premier dans la boucle, même si son prof préféré avait de la place.
   const withProfPreference = students.filter(s =>
@@ -393,7 +478,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
     lastCourtForProf[best.prof.id] = best.slot.court_id;
   });
 
-  // ---------- Phase 3 : reste des élèves, créneau par créneau ----------
+  // ---------- Phase 4 : reste des élèves, créneau par créneau ----------
   possibleSlots.forEach(({ slot, prof }) => {
     // Ce terrain est-il déjà occupé à ce jour/heure (par une phase précédente
     // ou par un bloc déjà posé plus tôt dans cette même phase 3) ?
@@ -432,7 +517,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       const partners = candidates.filter(o =>
         o.id !== s.id && !used.has(o.id) &&
         o.preference_groupe !== 'individuel' &&
-        wantsToPlayWith(s, o) && levelClose(s, o) && !isSiblingLinked(s, o)
+        wantsToPlayWith(s, o) && levelClose(s, o) && !isSameScheduleLinked(s, o)
       );
       // On ne fige un groupe ici QUE s'il y a une vraie réciprocité "veut
       // jouer avec" trouvée. Sans partenaire réciproque, on laisse cet élève
@@ -449,7 +534,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
     remaining.forEach(s => {
       if (used.has(s.id)) return;
       const similarLevel = remaining.filter(o =>
-        o.id !== s.id && !used.has(o.id) && levelClose(s, o) && !isSiblingLinked(s, o)
+        o.id !== s.id && !used.has(o.id) && levelClose(s, o) && !isSameScheduleLinked(s, o)
       );
       const members = [s, ...similarLevel].slice(0, 4);
       members.forEach(m => used.add(m.id));
@@ -505,29 +590,10 @@ function generatePlanningProposal(students, profs, courts, slots) {
     }
   });
 
-  const siblingHints = [];
-  const seenPairs = new Set();
-  students.forEach(s => {
-    if (!s.terrain_adjacent_avec) return;
-    const sibling = findStudentByName(students, s.terrain_adjacent_avec);
-    if (!sibling) return;
-    const sBlock = result.find(r => r.studentIds.includes(s.id));
-    const sibBlock = result.find(r => r.studentIds.includes(sibling.id));
-    if (sBlock && sibBlock && sBlock.jour === sibBlock.jour) {
-      const gap = Math.abs(timeToMinutes(sBlock.debut) - timeToMinutes(sibBlock.debut));
-      if (sBlock.courtId !== sibBlock.courtId && gap <= 60) {
-        const pairKey = [norm(s.name), norm(sibling.name)].sort().join('|');
-        if (seenPairs.has(pairKey)) return;
-        seenPairs.add(pairKey);
-        siblingHints.push({ a: s.name, b: sibling.name, sameDay: true, gapMinutes: gap });
-      }
-    }
-  });
-
   return {
     blocks: result,
     unplacedIds: Array.from(unplaced),
-    siblingHints,
+    sameScheduleUnresolved,
     conflicts,
   };
 }

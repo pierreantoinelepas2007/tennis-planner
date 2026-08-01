@@ -41,7 +41,7 @@ export default function FormulaireEleve({ onCreated }) {
   const [classement, setClassement] = useState('');
   const [preference, setPreference] = useState('indifferent');
   const [jouerAvec, setJouerAvec] = useState('');
-  const [terrainAdjacentAvec, setTerrainAdjacentAvec] = useState('');
+  const [memeHoraireAvec, setMemeHoraireAvec] = useState('');
   const [profPrefere, setProfPrefere] = useState('');
   const [disponibilites, setDisponibilites] = useState([]);
   const [submitted, setSubmitted] = useState(false);
@@ -50,7 +50,7 @@ export default function FormulaireEleve({ onCreated }) {
 
   const reset = () => {
     setName(''); setAge(''); setClassement(''); setPreference('indifferent');
-    setJouerAvec(''); setTerrainAdjacentAvec(''); setProfPrefere(''); setDisponibilites([]);
+    setJouerAvec(''); setMemeHoraireAvec(''); setProfPrefere(''); setDisponibilites([]);
   };
 
   const submit = async (e) => {
@@ -65,7 +65,7 @@ export default function FormulaireEleve({ onCreated }) {
         classement: classement || 'Non classé',
         preferenceGroupe: preference,
         jouerAvec: jouerAvec.split(',').map(s => s.trim()).filter(Boolean),
-        terrainAdjacentAvec: terrainAdjacentAvec.trim(),
+        memeHoraireAvec: memeHoraireAvec.trim(),
         profPrefere: profPrefere.trim(),
         disponibilites,
       });
@@ -128,9 +128,9 @@ export default function FormulaireEleve({ onCreated }) {
           />
 
           <TextField
-            label="Souhaite un terrain à côté de (facultatif)"
-            value={terrainAdjacentAvec}
-            onChange={setTerrainAdjacentAvec}
+            label="Souhaite le même horaire que (facultatif)"
+            value={memeHoraireAvec}
+            onChange={setMemeHoraireAvec}
             placeholder="Nom de la personne (ex : frère, sœur, conjoint...)"
           />
 
