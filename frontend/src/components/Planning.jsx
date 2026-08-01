@@ -23,10 +23,13 @@ export default function Planning({ students, profs, courts, planning, onChanged 
 
   const generate = async () => {
     if (planning.length > 0) {
-      const confirmed = window.confirm(
-        'Un planning existe déjà et a peut-être été modifié à la main. Régénérer va tout remplacer par une nouvelle proposition automatique. Continuer ?'
-      );
-      if (!confirmed) return;
+      const hasUnlocked = planning.some(b => !b.locked);
+      if (hasUnlocked) {
+        const confirmed = window.confirm(
+          'Les cours non verrouillés (🔓) vont être remplacés par une nouvelle proposition automatique. Les cours verrouillés (🔒) resteront inchangés. Continuer ?'
+        );
+        if (!confirmed) return;
+      }
     }
     setGenerating(true);
     setError(null);
@@ -82,6 +85,15 @@ export default function Planning({ students, profs, courts, planning, onChanged 
   const changeBlockField = async (blockId, field, value) => {
     try {
       await api.updatePlanningBlock(blockId, { [field]: value });
+      onChanged();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleLock = async (block) => {
+    try {
+      await api.updatePlanningBlock(block.id, { locked: !block.locked });
       onChanged();
     } catch (e) {
       console.error(e);
@@ -177,6 +189,7 @@ export default function Planning({ students, profs, courts, planning, onChanged 
               onRemove={() => removeBlock(b.id)}
               onToggleStudent={(sid) => toggleStudentInBlock(b, sid)}
               onChangeField={(field, value) => changeBlockField(b.id, field, value)}
+              onToggleLock={() => toggleLock(b)}
               profs={profs}
               courts={courts}
             />
@@ -204,30 +217,43 @@ export default function Planning({ students, profs, courts, planning, onChanged 
   );
 }
 
-function PlanningBlock({ block, studentsById, allStudents, onRemove, onToggleStudent, onChangeField, profs, courts }) {
+function PlanningBlock({ block, studentsById, allStudents, onRemove, onToggleStudent, onChangeField, onToggleLock, profs, courts }) {
   const [showAddStudent, setShowAddStudent] = useState(false);
   const blockStudents = block.studentIds.map(id => studentsById[id]).filter(Boolean);
   const notInBlock = allStudents.filter(s => !block.studentIds.includes(s.id));
+  const locked = !!block.locked;
 
   return (
-    <Card style={{ padding: '1rem 1.25rem' }}>
+    <Card style={{ padding: '1rem 1.25rem', borderColor: locked ? 'var(--clay)' : undefined, borderWidth: locked ? 2 : undefined }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{block.jour} {block.debut}–{block.fin}</p>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {block.jour} {block.debut}–{block.fin}
+            {locked && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--clay)', background: 'var(--accent-soft)', padding: '2px 8px', borderRadius: 999 }}>
+                Verrouillé
+              </span>
+            )}
+          </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Terrain :</span>
-            <select value={block.courtId} onChange={e => onChangeField('courtId', e.target.value)} style={{ fontSize: 13, padding: '2px 6px' }}>
+            <select value={block.courtId} onChange={e => onChangeField('courtId', e.target.value)} disabled={locked} style={{ fontSize: 13, padding: '2px 6px' }}>
               {courts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Prof :</span>
-            <select value={block.profId} onChange={e => onChangeField('profId', e.target.value)} style={{ fontSize: 13, padding: '2px 6px' }}>
+            <select value={block.profId} onChange={e => onChangeField('profId', e.target.value)} disabled={locked} style={{ fontSize: 13, padding: '2px 6px' }}>
               {profs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
         </div>
-        <button onClick={onRemove} aria-label="Supprimer ce cours">
-          <i className="ti ti-trash" style={{ fontSize: 16 }}></i>
-        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button onClick={onToggleLock} aria-label={locked ? 'Déverrouiller ce cours' : 'Verrouiller ce cours pour le préserver lors d\'une régénération'} title={locked ? 'Déverrouiller' : 'Verrouiller (préservé lors d\'une régénération)'}>
+            <i className={`ti ${locked ? 'ti-lock' : 'ti-lock-open'}`} style={{ fontSize: 16 }}></i>
+          </button>
+          <button onClick={onRemove} disabled={locked} aria-label="Supprimer ce cours">
+            <i className="ti ti-trash" style={{ fontSize: 16 }}></i>
+          </button>
+        </div>
       </div>
 
       <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -235,33 +261,37 @@ function PlanningBlock({ block, studentsById, allStudents, onRemove, onToggleStu
           <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}>
             {s.name}
             {s.niveauEtoile && <span style={{ color: 'var(--text-muted)' }}>({s.niveauEtoile}★)</span>}
-            <button onClick={() => onToggleStudent(s.id)} style={{ padding: 0, border: 'none', background: 'transparent' }} aria-label={`Retirer ${s.name}`}>
-              <i className="ti ti-x" style={{ fontSize: 13 }}></i>
-            </button>
+            {!locked && (
+              <button onClick={() => onToggleStudent(s.id)} style={{ padding: 0, border: 'none', background: 'transparent' }} aria-label={`Retirer ${s.name}`}>
+                <i className="ti ti-x" style={{ fontSize: 13 }}></i>
+              </button>
+            )}
           </span>
         ))}
         {blockStudents.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun participant</span>}
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        {!showAddStudent ? (
-          <button onClick={() => setShowAddStudent(true)} style={{ fontSize: 13, padding: '4px 10px' }}>
-            <i className="ti ti-plus" style={{ fontSize: 13, marginRight: 4 }}></i>Ajouter un participant
-          </button>
-        ) : (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <select
-              defaultValue=""
-              onChange={e => { if (e.target.value) { onToggleStudent(e.target.value); setShowAddStudent(false); } }}
-              style={{ fontSize: 13 }}
-            >
-              <option value="" disabled>Choisir un participant...</option>
-              {notInBlock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <button onClick={() => setShowAddStudent(false)} style={{ fontSize: 13, padding: '4px 8px' }}>Annuler</button>
-          </div>
-        )}
-      </div>
+      {!locked && (
+        <div style={{ marginTop: 10 }}>
+          {!showAddStudent ? (
+            <button onClick={() => setShowAddStudent(true)} style={{ fontSize: 13, padding: '4px 10px' }}>
+              <i className="ti ti-plus" style={{ fontSize: 13, marginRight: 4 }}></i>Ajouter un participant
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                defaultValue=""
+                onChange={e => { if (e.target.value) { onToggleStudent(e.target.value); setShowAddStudent(false); } }}
+                style={{ fontSize: 13 }}
+              >
+                <option value="" disabled>Choisir un participant...</option>
+                {notInBlock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button onClick={() => setShowAddStudent(false)} style={{ fontSize: 13, padding: '4px 8px' }}>Annuler</button>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

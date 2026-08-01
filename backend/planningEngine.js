@@ -182,6 +182,15 @@ function generatePlanningProposal(students, profs, courts, slots) {
     (a.jouer_avec || []).some(n => namesMatch(n, b.name)) ||
     (b.jouer_avec || []).some(n => namesMatch(n, a.name));
 
+  // Deux personnes liées par "terrain à côté de" ont explicitement demandé
+  // des cours SÉPARÉS mais rapprochés physiquement (ex: fratrie de niveaux
+  // différents) — cette relation est distincte de "veut jouer avec" et ne
+  // doit jamais les faire fusionner dans le même cours, même si leur niveau
+  // est proche par ailleurs.
+  const isSiblingLinked = (a, b) =>
+    namesMatch(a.terrain_adjacent_avec || '', b.name) ||
+    namesMatch(b.terrain_adjacent_avec || '', a.name);
+
   // Deux élèves sont de niveau proche si leurs classements officiels (quand
   // les deux en ont un reconnu) sont à 2 échelons d'écart maximum sur
   // l'échelle belge ; à défaut, on se rabat sur l'écart d'étoiles (saisies
@@ -228,7 +237,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       changed = false;
       for (const candidate of groupable) {
         if (visited.has(candidate.id)) continue;
-        if (members.some(m => wantsToPlayWith(m, candidate)) && members.every(m => levelClose(m, candidate))) {
+        if (members.some(m => wantsToPlayWith(m, candidate)) && members.every(m => levelClose(m, candidate)) && members.every(m => !isSiblingLinked(m, candidate))) {
           members.push(candidate);
           visited.add(candidate.id);
           changed = true;
@@ -423,7 +432,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       const partners = candidates.filter(o =>
         o.id !== s.id && !used.has(o.id) &&
         o.preference_groupe !== 'individuel' &&
-        wantsToPlayWith(s, o) && levelClose(s, o)
+        wantsToPlayWith(s, o) && levelClose(s, o) && !isSiblingLinked(s, o)
       );
       // On ne fige un groupe ici QUE s'il y a une vraie réciprocité "veut
       // jouer avec" trouvée. Sans partenaire réciproque, on laisse cet élève
@@ -440,7 +449,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
     remaining.forEach(s => {
       if (used.has(s.id)) return;
       const similarLevel = remaining.filter(o =>
-        o.id !== s.id && !used.has(o.id) && levelClose(s, o)
+        o.id !== s.id && !used.has(o.id) && levelClose(s, o) && !isSiblingLinked(s, o)
       );
       const members = [s, ...similarLevel].slice(0, 4);
       members.forEach(m => used.add(m.id));

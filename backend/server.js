@@ -240,6 +240,7 @@ app.get('/api/planning', async (req, res) => {
       fin: r.fin,
       studentIds: r.student_ids || [],
       score: r.score,
+      locked: r.locked || false,
     }));
     res.json(blocks);
   } catch (e) {
@@ -256,25 +257,42 @@ app.post('/api/planning/generate', async (req, res) => {
     const { rows: dispoRows } = await pool.query('SELECT * FROM prof_disponibilites');
     const { rows: courtRows } = await pool.query('SELECT * FROM courts');
     const { rows: slotRows } = await pool.query('SELECT * FROM court_slots');
+    const { rows: lockedBlocks } = await pool.query('SELECT * FROM planning_blocks WHERE locked = true');
 
-    const students = studentRows.map(s => ({
-      ...s,
-      jouer_avec: s.jouer_avec || [],
-      disponibilites: studentDispoRows.filter(d => d.student_id === s.id),
-    }));
+    // Les personnes déjà placées dans un cours verrouillé ne sont plus
+    // candidates pour le reste de la génération (cette demande de cours est
+    // considérée réglée par le professeur).
+    const lockedStudentIds = new Set(lockedBlocks.flatMap(b => b.student_ids || []));
+    const students = studentRows
+      .filter(s => !lockedStudentIds.has(s.id))
+      .map(s => ({
+        ...s,
+        jouer_avec: s.jouer_avec || [],
+        disponibilites: studentDispoRows.filter(d => d.student_id === s.id),
+      }));
     const profs = profRows.map(p => ({
       ...p,
       disponibilites: dispoRows.filter(d => d.prof_id === p.id),
     }));
 
-    const proposal = generatePlanningProposal(students, profs, courtRows, slotRows);
+    // Les créneaux (terrain + jour + heure) déjà occupés par un cours
+    // verrouillé ne sont plus proposés à l'algorithme, pour ne jamais
+    // créer de double réservation avec un cours que le professeur a fixé.
+    const lockedSlotKeys = new Set(
+      lockedBlocks.map(b => `${b.court_id}|${b.jour}|${b.debut}|${b.fin}`)
+    );
+    const availableSlots = slotRows.filter(s =>
+      !lockedSlotKeys.has(`${s.court_id}|${s.jour}|${s.debut}|${s.fin}`)
+    );
 
-    await pool.query('DELETE FROM planning_blocks');
+    const proposal = generatePlanningProposal(students, profs, courtRows, availableSlots);
+
+    await pool.query('DELETE FROM planning_blocks WHERE locked = false OR locked IS NULL');
     for (const b of proposal.blocks) {
       const id = uid();
       await pool.query(
-        `INSERT INTO planning_blocks (id, slot_id, court_id, prof_id, jour, debut, fin, student_ids, score)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO planning_blocks (id, slot_id, court_id, prof_id, jour, debut, fin, student_ids, score, locked)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)`,
         [id, b.slotId, b.courtId, b.profId, b.jour, b.debut, b.fin, JSON.stringify(b.studentIds), b.score]
       );
     }
@@ -286,6 +304,7 @@ app.post('/api/planning/generate', async (req, res) => {
       unplacedStudents,
       siblingHints: proposal.siblingHints,
       conflicts: proposal.conflicts,
+      lockedBlocksKept: lockedBlocks.length,
     });
   } catch (e) {
     console.error(e);
@@ -302,6 +321,7 @@ app.patch('/api/planning/:id', async (req, res) => {
     if ('courtId' in b) { fields.push(`court_id = $${idx++}`); values.push(b.courtId); }
     if ('profId' in b) { fields.push(`prof_id = $${idx++}`); values.push(b.profId); }
     if ('studentIds' in b) { fields.push(`student_ids = $${idx++}`); values.push(JSON.stringify(b.studentIds)); }
+    if ('locked' in b) { fields.push(`locked = $${idx++}`); values.push(!!b.locked); }
     if (fields.length === 0) return res.json({ ok: true });
     values.push(req.params.id);
     await pool.query(`UPDATE planning_blocks SET ${fields.join(', ')} WHERE id = $${idx}`, values);

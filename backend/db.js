@@ -88,8 +88,15 @@ async function initDb() {
       fin TEXT NOT NULL,
       student_ids JSONB DEFAULT '[]',
       score REAL,
+      locked BOOLEAN DEFAULT false,
       created_at TIMESTAMPTZ DEFAULT now()
     );
+  `);
+
+  // Migration : ajoute la colonne "locked" si la table existait déjà avant
+  // son introduction (ne fait rien si elle est déjà présente).
+  await pool.query(`
+    ALTER TABLE planning_blocks ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT false;
   `);
 
   console.log('Base de données initialisée (tables vérifiées/créées).');
