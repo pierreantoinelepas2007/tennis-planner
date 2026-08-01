@@ -4,24 +4,27 @@ import { api } from '../api.js';
 
 export default function AdminTerrains({ courts, onChanged }) {
   const [name, setName] = useState('');
+  const [error, setError] = useState(null);
 
   const addCourt = async () => {
     if (!name.trim()) return;
     try {
       await api.createCourt({ name: name.trim() });
       setName('');
+      setError(null);
       onChanged();
     } catch (e) {
-      console.error(e);
+      setError(e.message);
     }
   };
 
   const removeCourt = async (id) => {
     try {
       await api.deleteCourt(id);
+      setError(null);
       onChanged();
     } catch (e) {
-      console.error(e);
+      setError(e.message);
     }
   };
 
@@ -49,6 +52,12 @@ export default function AdminTerrains({ courts, onChanged }) {
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: -8 }}>
         Renseignez ici uniquement les créneaux que le professeur vous indique comme disponibles pour l'école (hors location).
       </p>
+
+      {error && (
+        <Card style={{ marginBottom: 14, background: 'var(--danger-bg)' }}>
+          <p style={{ margin: 0, color: 'var(--danger-text)', fontSize: 14 }}>{error}</p>
+        </Card>
+      )}
 
       <Card style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 16 }}>Ajouter un terrain</h3>

@@ -22,6 +22,12 @@ export default function Planning({ students, profs, courts, planning, onChanged 
   const canGenerate = students.length > 0 && profs.length > 0 && courts.length > 0 && totalSlots > 0;
 
   const generate = async () => {
+    if (planning.length > 0) {
+      const confirmed = window.confirm(
+        'Un planning existe déjà et a peut-être été modifié à la main. Régénérer va tout remplacer par une nouvelle proposition automatique. Continuer ?'
+      );
+      if (!confirmed) return;
+    }
     setGenerating(true);
     setError(null);
     try {

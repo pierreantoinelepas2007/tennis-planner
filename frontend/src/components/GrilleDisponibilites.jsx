@@ -99,7 +99,7 @@ export default function GrilleDisponibilites({ value, onChange }) {
         </tbody>
       </table>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-        Cliquez (ou glissez) sur les créneaux d'une heure où la personne est disponible.
+        Cliquez sur les créneaux d'une heure où la personne est disponible (glissez pour en cocher plusieurs sur ordinateur).
       </p>
     </div>
   );

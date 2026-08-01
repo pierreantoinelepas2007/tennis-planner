@@ -42,11 +42,14 @@ app.get('/api/students', async (req, res) => {
 app.post('/api/students', async (req, res) => {
   try {
     const b = req.body;
+    if (!b.name || !b.name.trim()) {
+      return res.status(400).json({ error: 'Le nom est obligatoire.' });
+    }
     const id = uid();
     await pool.query(
       `INSERT INTO students (id, name, age, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, b.name, b.age || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
+      [id, b.name.trim(), b.age || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
         JSON.stringify(b.jouerAvec || []), b.terrainAdjacentAvec || null, b.profPrefere || null]
     );
     const disponibilites = Array.isArray(b.disponibilites) ? b.disponibilites : [];
@@ -119,6 +122,10 @@ app.post('/api/profs', async (req, res) => {
 
 app.delete('/api/profs/:id', async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT COUNT(*) FROM planning_blocks WHERE prof_id = $1', [req.params.id]);
+    if (parseInt(rows[0].count, 10) > 0) {
+      return res.status(409).json({ error: "Ce professeur apparaît dans le planning actuel. Supprimez ou modifiez d'abord ses cours dans l'onglet Planning avant de le retirer." });
+    }
     await pool.query('DELETE FROM profs WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) {
@@ -182,6 +189,10 @@ app.post('/api/courts', async (req, res) => {
 
 app.delete('/api/courts/:id', async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT COUNT(*) FROM planning_blocks WHERE court_id = $1', [req.params.id]);
+    if (parseInt(rows[0].count, 10) > 0) {
+      return res.status(409).json({ error: "Ce terrain apparaît dans le planning actuel. Supprimez ou modifiez d'abord ses cours dans l'onglet Planning avant de le retirer." });
+    }
     await pool.query('DELETE FROM courts WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) {

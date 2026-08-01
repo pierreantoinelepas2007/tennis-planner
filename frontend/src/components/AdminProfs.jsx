@@ -5,24 +5,27 @@ import { api } from '../api.js';
 export default function AdminProfs({ profs, onChanged }) {
   const [name, setName] = useState('');
   const [specialite, setSpecialite] = useState('');
+  const [error, setError] = useState(null);
 
   const addProf = async () => {
     if (!name.trim()) return;
     try {
       await api.createProf({ name: name.trim(), specialite: specialite.trim() });
       setName(''); setSpecialite('');
+      setError(null);
       onChanged();
     } catch (e) {
-      console.error(e);
+      setError(e.message);
     }
   };
 
   const removeProf = async (id) => {
     try {
       await api.deleteProf(id);
+      setError(null);
       onChanged();
     } catch (e) {
-      console.error(e);
+      setError(e.message);
     }
   };
 
@@ -47,6 +50,12 @@ export default function AdminProfs({ profs, onChanged }) {
   return (
     <div>
       <h2 style={{ marginTop: 0 }}>Professeurs ({profs.length})</h2>
+
+      {error && (
+        <Card style={{ marginBottom: 14, background: 'var(--danger-bg)' }}>
+          <p style={{ margin: 0, color: 'var(--danger-text)', fontSize: 14 }}>{error}</p>
+        </Card>
+      )}
 
       <Card style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 16 }}>Ajouter un professeur</h3>
