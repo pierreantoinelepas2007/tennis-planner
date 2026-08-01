@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { pool, initDb } = require('./db');
 const { generatePlanningProposal } = require('./planningEngine');
 const { seedIfEmpty } = require('./seed');
+const { seedTestStudents } = require('./seedTestData');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -318,6 +319,43 @@ app.delete('/api/planning/:id', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Erreur serveur lors de la suppression.' });
+  }
+});
+
+// ---------- TEMPORAIRE : jeu de données de test (à retirer après validation) ----------
+// Déclenché manuellement via /api/test/seed?key=demo pour insérer 21 participants
+// fictifs variés, et /api/test/clear?key=demo pour tout retirer proprement.
+
+app.post('/api/test/seed', async (req, res) => {
+  if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
+  try {
+    const ids = await seedTestStudents(pool);
+    res.json({ ok: true, count: ids.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur lors de l\'insertion des données de test.' });
+  }
+});
+
+app.post('/api/test/clear', async (req, res) => {
+  if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
+  try {
+    const testNames = [
+      'Léa Dupont', 'Tom Dupont', 'Manon Petit', 'Hugo Petit', 'Emma Lefevre', 'Chloé Bernard',
+      'Nathan Girard', 'Louis Girard', 'Adam Roux', 'Zoé Martin', 'Noah Simon', 'Sarah Moreau',
+      'Gabriel Laurent', 'Inès Fabre', 'Théo Blanc', 'Rose Fontaine', 'Sacha Perrin', 'Louna Dubois',
+      'Mathis Renard', 'Alice Colin', 'Ethan Faure',
+    ];
+    const { rows } = await pool.query('SELECT id FROM students WHERE name = ANY($1)', [testNames]);
+    const ids = rows.map(r => r.id);
+    if (ids.length > 0) {
+      await pool.query('DELETE FROM students WHERE id = ANY($1)', [ids]);
+    }
+    await pool.query('DELETE FROM planning_blocks');
+    res.json({ ok: true, removed: ids.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur lors du nettoyage des données de test.' });
   }
 });
 

@@ -314,10 +314,80 @@ function generatePlanningProposal(students, profs, courts, slots) {
     lastCourtForProf[best.prof.id] = best.slot.court_id;
   });
 
-  // ---------- Phase 2 : reste des élèves, créneau par créneau ----------
+  // ---------- Phase 2 : priorité aux préférences de professeur ----------
+  // Pour les élèves restants (non casés en phase 1) qui ont exprimé une
+  // préférence de professeur reconnue, on cherche activement le meilleur
+  // créneau disponible avec CE prof précis, avant de les laisser au hasard de
+  // l'ordre des créneaux en phase 3. Sans cette étape, un élève peut se faire
+  // caser avec un autre prof simplement parce que son créneau était examiné
+  // en premier dans la boucle, même si son prof préféré avait de la place.
+  const withProfPreference = students.filter(s =>
+    unplaced.has(s.id) && s.prof_prefere && profs.some(p => namesMatch(p.name, s.prof_prefere))
+  );
+
+  withProfPreference.forEach(s => {
+    if (!unplaced.has(s.id)) return; // peut avoir été casé entre-temps (cours multiple du même nom)
+    const preferredProf = profs.find(p => namesMatch(p.name, s.prof_prefere));
+    if (!preferredProf) return;
+
+    const candidateSlots = possibleSlots.filter(({ slot, prof }) => {
+      if (prof.id !== preferredProf.id) return false;
+      const usedDays = daysUsedByName[norm(s.name)];
+      if (usedDays && usedDays.has(slot.jour)) return false;
+      const courtTaken = result.some(r =>
+        r.courtId === slot.court_id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
+      );
+      if (courtTaken) return false;
+      const profTaken = result.some(r =>
+        r.profId === prof.id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
+      );
+      if (profTaken) return false;
+      return studentAvailableForSlot(s, slot.jour, slot.debut, slot.fin);
+    });
+    if (candidateSlots.length === 0) return; // pas de créneau dispo avec ce prof : phase 3 s'en chargera
+
+    // Parmi les créneaux possibles avec le prof préféré, on privilégie celui
+    // qui préserve le mieux les jours dont ce même élève pourrait avoir besoin
+    // pour une autre de ses demandes de cours (même logique que phase 1).
+    const scored = candidateSlots.map(({ slot, prof }) => {
+      const stabilityBonus = lastCourtForProf[prof.id] === slot.court_id ? 2 : 0;
+      let otherDemandPenalty = 0;
+      const key = norm(s.name);
+      if (multiDemandNames.has(key)) {
+        const otherEntries = students.filter(s2 => norm(s2.name) === key && s2.id !== s.id && unplaced.has(s2.id));
+        otherEntries.forEach(other => {
+          const otherDays = availableDaysFor(other);
+          if (otherDays.has(slot.jour)) {
+            otherDemandPenalty += Math.max(0, 6 - otherDays.size);
+          }
+        });
+      }
+      return { slot, prof, score: stabilityBonus - otherDemandPenalty };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const best = scored[0];
+
+    unplaced.delete(s.id);
+    const key = norm(s.name);
+    if (!daysUsedByName[key]) daysUsedByName[key] = new Set();
+    daysUsedByName[key].add(best.slot.jour);
+    result.push({
+      slotId: best.slot.id,
+      courtId: best.slot.court_id,
+      profId: best.prof.id,
+      jour: best.slot.jour,
+      debut: best.slot.debut,
+      fin: best.slot.fin,
+      studentIds: [s.id],
+      score: 8 + best.score,
+    });
+    lastCourtForProf[best.prof.id] = best.slot.court_id;
+  });
+
+  // ---------- Phase 3 : reste des élèves, créneau par créneau ----------
   possibleSlots.forEach(({ slot, prof }) => {
-    // Ce terrain est-il déjà occupé à ce jour/heure (par la phase 1 ou par un
-    // bloc déjà posé plus tôt dans cette même phase 2) ?
+    // Ce terrain est-il déjà occupé à ce jour/heure (par une phase précédente
+    // ou par un bloc déjà posé plus tôt dans cette même phase 3) ?
     const courtAlreadyUsed = result.some(r =>
       r.courtId === slot.court_id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
     );
@@ -402,19 +472,26 @@ function generatePlanningProposal(students, profs, courts, slots) {
     });
     lastCourtForProf[prof.id] = slot.court_id;
 
-    // Un vrai conflit : d'autres élèves étaient disponibles et candidats sur ce
-    // même créneau/prof mais n'ont pas pu être regroupés avec les retenus
-    // (préférence individuel, niveau trop éloigné, pas de réciprocité). Ils
-    // restent dans le bassin "unplaced" et seront réexaminés sur d'autres
-    // créneaux, mais on signale ce choix pour que le prof puisse arbitrer.
-    if (rejectedGroups.length > 0) {
+    // Un vrai conflit : d'autres personnes étaient disponibles et candidates
+    // sur ce même créneau/prof mais n'ont pas pu être regroupées avec les
+    // retenues (préférence individuel, niveau trop éloigné, pas de
+    // réciprocité). On exclut les cas où le "rejeté" est en fait la même
+    // personne que la "retenue" (deux demandes de cours différentes du même
+    // nom, ex: un cours groupe et un cours individuel) : ce n'est pas un vrai
+    // arbitrage à faire, l'autre demande sera simplement recasée ailleurs.
+    const placedNamesNorm = new Set(chosen.members.map(m => norm(m.name)));
+    const rejectedNames = rejectedGroups
+      .flatMap(g => g.members.map(m => m.name))
+      .filter(name => !placedNamesNorm.has(norm(name)));
+
+    if (rejectedNames.length > 0) {
       conflicts.push({
         jour: slot.jour,
         debut: slot.debut,
         fin: slot.fin,
         profName: prof.name,
         placedNames: chosen.members.map(m => m.name),
-        rejectedNames: rejectedGroups.flatMap(g => g.members.map(m => m.name)),
+        rejectedNames,
       });
     }
   });
