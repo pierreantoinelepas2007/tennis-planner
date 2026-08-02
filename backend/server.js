@@ -72,13 +72,15 @@ app.get('/api/students', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/students', async (req, res) => {
+  const client = await pool.connect();
   try {
     const b = req.body;
     if (!b.name || !b.name.trim()) {
       return res.status(400).json({ error: 'Le nom est obligatoire.' });
     }
     const id = uid();
-    await pool.query(
+    await client.query('BEGIN');
+    await client.query(
       `INSERT INTO students (id, name, age, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [id, b.name.trim(), b.age || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
@@ -86,15 +88,24 @@ app.post('/api/students', async (req, res) => {
     );
     const disponibilites = Array.isArray(b.disponibilites) ? b.disponibilites : [];
     for (const d of disponibilites) {
-      await pool.query(
+      await client.query(
         'INSERT INTO student_disponibilites (id, student_id, jour, heure) VALUES ($1, $2, $3, $4)',
         [uid(), id, d.jour, d.heure]
       );
     }
+    // Tout ou rien : si la création du participant réussit mais qu'une
+    // disponibilité échoue à s'enregistrer (coupure réseau, erreur passagère
+    // de la base), on annule complètement plutôt que de laisser une
+    // inscription à moitié enregistrée, invisible et impossible à repérer
+    // pour le professeur ensuite.
+    await client.query('COMMIT');
     res.status(201).json({ id });
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: "Erreur serveur lors de l'enregistrement de l'élève." });
+  } finally {
+    client.release();
   }
 });
 
