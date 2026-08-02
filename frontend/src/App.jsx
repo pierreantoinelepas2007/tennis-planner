@@ -9,8 +9,21 @@ import AdminTerrains from './components/AdminTerrains.jsx';
 import Planning from './components/Planning.jsx';
 import VueProf from './components/VueProf.jsx';
 
+const VALID_TABS = ['accueil', 'formulaire', 'admin-eleves', 'admin-profs', 'admin-terrains', 'planning', 'vue-prof'];
+
+function getInitialTab() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('tab');
+    if (requested && VALID_TABS.includes(requested)) return requested;
+  } catch (e) {
+    // ignore, repli sur l'accueil
+  }
+  return 'accueil';
+}
+
 export default function App() {
-  const [tab, setTab] = useState('accueil');
+  const [tab, setTab] = useState(getInitialTab);
   const [students, setStudents] = useState([]);
   const [profs, setProfs] = useState([]);
   const [courts, setCourts] = useState([]);
