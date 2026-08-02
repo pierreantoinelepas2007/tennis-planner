@@ -505,65 +505,143 @@ function generatePlanningProposal(students, profs, courts, slots) {
     lastCourtForProf[best.prof.id] = best.slot.court_id;
   });
 
-  // ---------- Phase 4 : reste des élèves, créneau par créneau ----------
-  possibleSlots.forEach(({ slot, prof }) => {
-    // Ce terrain est-il déjà occupé à ce jour/heure (par une phase précédente
-    // ou par un bloc déjà posé plus tôt dans cette même phase 3) ?
-    const courtAlreadyUsed = result.some(r =>
-      r.courtId === slot.court_id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
-    );
-    if (courtAlreadyUsed) return;
-    // Ce prof est-il déjà occupé à ce jour/heure, sur un autre terrain ?
-    const profAlreadyUsed = result.some(r =>
-      r.profId === prof.id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
-    );
-    if (profAlreadyUsed) return;
+  // ---------- Phase 4 : reste des élèves, créneaux triés par potentiel de remplissage ----------
+  // Plutôt que de traiter les créneaux dans un ordre fixe (jour puis heure),
+  // ce qui peut "disperser" des personnes groupables sur des petits groupes
+  // formés tôt alors qu'un autre créneau aurait pu réunir davantage de monde
+  // compatible, on retraite à chaque itération le nombre de candidats
+  // groupables potentiels de chaque créneau restant et on traite en premier
+  // celui qui peut accueillir le plus grand groupe cohérent. Ça maximise le
+  // taux de remplissage global, particulièrement visible à grande échelle
+  // (plusieurs centaines de personnes).
 
-    const candidates = students.filter(s => {
+  function countGroupablePotential(slot, prof) {
+    const availableHere = students.filter(s => {
       if (!unplaced.has(s.id)) return false;
       if (!studentAvailableForSlot(s, slot.jour, slot.debut, slot.fin)) return false;
-      const key = norm(s.name);
-      const usedDays = daysUsedByName[key];
+      const usedDays = daysUsedByName[norm(s.name)];
       if (usedDays && usedDays.has(slot.jour)) return false;
       return true;
     });
-    if (candidates.length === 0) return;
+    if (availableHere.length === 0) return 0;
+    // Estimation rapide : le plus grand sous-groupe de niveau mutuellement
+    // proche parmi les disponibles ici (sans calculer le regroupement complet,
+    // juste pour classer les créneaux entre eux).
+    let best = 1;
+    availableHere.forEach(s => {
+      if (s.preference_groupe === 'individuel') return;
+      const compatibles = availableHere.filter(o =>
+        o.id !== s.id && o.preference_groupe !== 'individuel' &&
+        levelClose(s, o) && !isSameScheduleLinked(s, o)
+      );
+      best = Math.max(best, Math.min(4, compatibles.length + 1));
+    });
+    return best;
+  }
+
+  // Regroupe les créneaux possibles par horaire (jour+heure), indépendamment
+  // du terrain : à un même horaire, plusieurs terrains/profs peuvent être
+  // disponibles simultanément, et il faut répartir les candidats entre eux
+  // de façon coordonnée pour éviter que deux personnes compatibles se
+  // retrouvent chacune seule sur un terrain différent alors qu'elles
+  // auraient dû être réunies sur un seul terrain (libérant l'autre terrain
+  // pour d'autres personnes).
+  const entriesByTime = {};
+  possibleSlots.forEach(entry => {
+    const key = `${entry.slot.jour}|${entry.slot.debut}`;
+    if (!entriesByTime[key]) entriesByTime[key] = [];
+    entriesByTime[key].push(entry);
+  });
+
+  function countAvailableAtTime(entries) {
+    if (entries.length === 0) return 0;
+    const { slot } = entries[0];
+    return students.filter(s => {
+      if (!unplaced.has(s.id)) return false;
+      if (!studentAvailableForSlot(s, slot.jour, slot.debut, slot.fin)) return false;
+      const usedDays = daysUsedByName[norm(s.name)];
+      if (usedDays && usedDays.has(slot.jour)) return false;
+      return true;
+    }).length;
+  }
+
+  const timeKeys = Object.keys(entriesByTime);
+
+  while (timeKeys.some(k => entriesByTime[k].length > 0)) {
+    // Retirer, pour chaque horaire, les entrées dont le terrain ou le prof
+    // est déjà occupé par un bloc posé précédemment.
+    timeKeys.forEach(key => {
+      entriesByTime[key] = entriesByTime[key].filter(({ slot, prof }) => {
+        const courtUsed = result.some(r =>
+          r.courtId === slot.court_id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
+        );
+        const profUsed = result.some(r =>
+          r.profId === prof.id && r.jour === slot.jour && r.debut === slot.debut && r.fin === slot.fin
+        );
+        return !courtUsed && !profUsed;
+      });
+    });
+
+    // Choisir l'horaire avec le plus de candidats disponibles au total (plus
+    // il y a de monde disponible en même temps, plus il y a de chances de
+    // former de gros groupes cohérents sur les différents terrains offerts).
+    let bestKey = null;
+    let bestCount = -1;
+    timeKeys.forEach(key => {
+      const entries = entriesByTime[key];
+      if (entries.length === 0) return;
+      const count = countAvailableAtTime(entries);
+      if (count > bestCount) {
+        bestCount = count;
+        bestKey = key;
+      }
+    });
+    if (!bestKey || bestCount <= 0) break;
+
+    const entries = entriesByTime[bestKey];
+    const { slot: anySlot } = entries[0];
+
+    // Un même terrain peut apparaître plusieurs fois dans `entries` si
+    // plusieurs profs sont chacun disponibles dessus à cet horaire dans les
+    // données déclarées (un club peut associer plusieurs profs possibles à
+    // un même terrain/heure sans figer qui l'occupera). Physiquement, ce
+    // terrain ne peut recevoir qu'un seul cours : on ne garde qu'une entrée
+    // par terrain pour cet horaire.
+    const seenCourts = new Set();
+    const dedupedEntries = entries.filter(({ slot }) => {
+      if (seenCourts.has(slot.court_id)) return false;
+      seenCourts.add(slot.court_id);
+      return true;
+    });
+
+    // Tous les candidats disponibles à cet horaire, indépendamment du terrain.
+    const candidates = students.filter(s => {
+      if (!unplaced.has(s.id)) return false;
+      if (!studentAvailableForSlot(s, anySlot.jour, anySlot.debut, anySlot.fin)) return false;
+      const usedDays = daysUsedByName[norm(s.name)];
+      if (usedDays && usedDays.has(anySlot.jour)) return false;
+      return true;
+    });
 
     const used = new Set();
-    const groups = [];
+    const formedGroups = []; // { members }
 
-    candidates.sort((a, b) => scoreProf(b, prof) - scoreProf(a, prof));
-
+    // 1) Priorité aux réciprocités "veut jouer avec" parmi les candidats de cet horaire.
     candidates.forEach(s => {
-      if (used.has(s.id)) return;
-      if (s.preference_groupe === 'individuel') {
-        groups.push({ members: [s], score: 10 + scoreProf(s, prof) });
-        used.add(s.id);
-        return;
-      }
+      if (used.has(s.id) || s.preference_groupe === 'individuel') return;
       const partners = candidates.filter(o =>
-        o.id !== s.id && !used.has(o.id) &&
-        o.preference_groupe !== 'individuel' &&
+        o.id !== s.id && !used.has(o.id) && o.preference_groupe !== 'individuel' &&
         wantsToPlayWith(s, o) && levelClose(s, o) && !isSameScheduleLinked(s, o)
       );
-      // On ne fige un groupe ici QUE s'il y a une vraie réciprocité "veut
-      // jouer avec" trouvée. Sans partenaire réciproque, on laisse cet élève
-      // disponible pour la boucle de repli ci-dessous, qui regroupe par
-      // simple proximité de niveau (sans exiger de réciprocité).
       if (partners.length === 0) return;
       const members = [s, ...partners].slice(0, 4);
       members.forEach(m => used.add(m.id));
-      const score = 5 + members.length + members.reduce((acc, m) => acc + scoreProf(m, prof), 0) + 5;
-      groups.push({ members, score });
+      formedGroups.push({ members });
     });
 
-    const remaining = candidates.filter(s => !used.has(s.id));
-    // Pour maximiser le nombre de personnes casées, on trie les candidats
-    // restants par niveau (indice unifié classement/étoile) avant de les
-    // regrouper : ça place naturellement côte à côte, dans la liste, les
-    // personnes de niveaux voisins, ce qui permet de former des groupes plus
-    // grands et plus cohérents que de traiter les candidats dans un ordre
-    // arbitraire.
+    // 2) Regroupement par niveau proche parmi les candidats restants, triés
+    // pour placer les niveaux voisins côte à côte dans la liste.
+    const remaining = candidates.filter(s => !used.has(s.id) && s.preference_groupe !== 'individuel');
     const remainingSorted = [...remaining].sort((a, b) => {
       const la = levelIndex(a), lb = levelIndex(b);
       if (la == null && lb == null) return 0;
@@ -578,57 +656,124 @@ function generatePlanningProposal(students, profs, courts, slots) {
       );
       const members = [s, ...similarLevel].slice(0, 4);
       members.forEach(m => used.add(m.id));
-      groups.push({ members, score: 1 + members.length + members.reduce((acc, m) => acc + scoreProf(m, prof), 0) });
+      formedGroups.push({ members });
     });
 
-    if (groups.length === 0) return;
-
-    const stabilityBonus = lastCourtForProf[prof.id] === slot.court_id ? 2 : 0;
-    groups.sort((a, b) => b.score - a.score);
-    const chosen = groups[0];
-    const rejectedGroups = groups.slice(1);
-
-    chosen.members.forEach(m => {
-      unplaced.delete(m.id);
-      const key = norm(m.name);
-      if (!daysUsedByName[key]) daysUsedByName[key] = new Set();
-      daysUsedByName[key].add(slot.jour);
+    // 3) Les personnes en préférence individuelle forment chacune leur propre groupe.
+    candidates.filter(s => !used.has(s.id) && s.preference_groupe === 'individuel').forEach(s => {
+      used.add(s.id);
+      formedGroups.push({ members: [s] });
     });
-    result.push({
-      slotId: slot.id,
-      courtId: slot.court_id,
-      profId: prof.id,
-      jour: slot.jour,
-      debut: slot.debut,
-      fin: slot.fin,
-      studentIds: chosen.members.map(m => m.id),
-      score: chosen.score + stabilityBonus,
+
+    // Score de chaque groupe formé (réutilisé pour trier et pour les conflits).
+    // Le score de préférence de prof est calculé séparément lors de
+    // l'assignation à un terrain/prof précis (voir plus bas), puisqu'aucun
+    // prof n'est encore attribué à ce stade.
+    // Priorité : réciprocité "jouer avec" (engagement explicite entre deux
+    // personnes) > taille du groupe (maximise le remplissage, un groupe de 4
+    // occupe un terrain aussi efficacement qu'un individuel mais case 4x plus
+    // de monde) > demande individuelle seule (n'occupe le terrain que pour
+    // une personne, à ne privilégier que s'il ne reste pas assez de groupes
+    // pour remplir tous les terrains disponibles à cet horaire).
+    const scoredGroups = formedGroups.map(g => {
+      const isIndividuelSolo = g.members.length === 1 && g.members[0].preference_groupe === 'individuel';
+      const hasReciprocity = g.members.length > 1 && g.members.some((m, i) =>
+        g.members.some((o, j) => i !== j && wantsToPlayWith(m, o))
+      );
+      const reciprocityBonus = hasReciprocity ? 20 : 0;
+      const base = isIndividuelSolo ? 1 : 0;
+      const score = reciprocityBonus + base + g.members.length * 5;
+      return { ...g, score };
     });
-    lastCourtForProf[prof.id] = slot.court_id;
+    scoredGroups.sort((a, b) => b.score - a.score);
 
-    // Un vrai conflit : d'autres personnes étaient disponibles et candidates
-    // sur ce même créneau/prof mais n'ont pas pu être regroupées avec les
-    // retenues (préférence individuel, niveau trop éloigné, pas de
-    // réciprocité). On exclut les cas où le "rejeté" est en fait la même
-    // personne que la "retenue" (deux demandes de cours différentes du même
-    // nom, ex: un cours groupe et un cours individuel) : ce n'est pas un vrai
-    // arbitrage à faire, l'autre demande sera simplement recasée ailleurs.
-    const placedNamesNorm = new Set(chosen.members.map(m => norm(m.name)));
-    const rejectedNames = rejectedGroups
-      .flatMap(g => g.members.map(m => m.name))
-      .filter(name => !placedNamesNorm.has(norm(name)));
+    // Assignation des groupes formés aux terrains disponibles à cet horaire,
+    // en donnant la priorité aux terrains où le prof correspond à une
+    // préférence exprimée par un membre du groupe, puis à la stabilité.
+    const availableCourtEntries = [...dedupedEntries];
+    const unassignedGroups = [];
 
-    if (rejectedNames.length > 0) {
-      conflicts.push({
+    scoredGroups.forEach(group => {
+      if (availableCourtEntries.length === 0) {
+        unassignedGroups.push(group);
+        return;
+      }
+      // Meilleur terrain/prof pour ce groupe précis.
+      let bestEntryIndex = 0;
+      let bestEntryScore = -Infinity;
+      availableCourtEntries.forEach((entry, idx) => {
+        const profScore = group.members.reduce((acc, m) => acc + scoreProf(m, entry.prof), 0);
+        const stabilityBonus = lastCourtForProf[entry.prof.id] === entry.slot.court_id ? 2 : 0;
+        const entryScore = profScore + stabilityBonus;
+        if (entryScore > bestEntryScore) {
+          bestEntryScore = entryScore;
+          bestEntryIndex = idx;
+        }
+      });
+      const { slot, prof } = availableCourtEntries[bestEntryIndex];
+      // Un même prof ne peut occuper qu'un seul terrain à cet horaire : on
+      // retire de la liste des terrains encore disponibles pour ce tour
+      // toutes les entrées liées à ce terrain OU à ce prof.
+      for (let i = availableCourtEntries.length - 1; i >= 0; i--) {
+        const e = availableCourtEntries[i];
+        if (e.slot.court_id === slot.court_id || e.prof.id === prof.id) {
+          availableCourtEntries.splice(i, 1);
+        }
+      }
+
+      group.members.forEach(m => {
+        unplaced.delete(m.id);
+        const key = norm(m.name);
+        if (!daysUsedByName[key]) daysUsedByName[key] = new Set();
+        daysUsedByName[key].add(slot.jour);
+      });
+      result.push({
+        slotId: slot.id,
+        courtId: slot.court_id,
+        profId: prof.id,
         jour: slot.jour,
         debut: slot.debut,
         fin: slot.fin,
-        profName: prof.name,
-        placedNames: chosen.members.map(m => m.name),
-        rejectedNames,
+        studentIds: group.members.map(m => m.id),
+        score: group.score + bestEntryScore,
       });
+      lastCourtForProf[prof.id] = slot.court_id;
+
+      // Retire toutes les entrées de ce terrain à cet horaire (y compris les
+      // doublons avec un autre prof potentiel qu'on avait dédupliqués), ce
+      // terrain étant maintenant occupé pour de bon.
+      entriesByTime[bestKey] = entriesByTime[bestKey].filter(e => e.slot.court_id !== slot.court_id);
+    });
+
+    // Les groupes qui n'ont pas pu être assignés à un terrain (plus de
+    // groupes formés que de terrains disponibles à cet horaire) restent
+    // non casés pour l'instant : la phase 5 de consolidation ou un autre
+    // horaire pourra éventuellement les accueillir.
+    if (unassignedGroups.length > 0 && scoredGroups.length > 0) {
+      const placedNames = scoredGroups
+        .filter(g => !unassignedGroups.includes(g))
+        .flatMap(g => g.members.map(m => m.name));
+      const rejectedNames = unassignedGroups.flatMap(g => g.members.map(m => m.name));
+      if (placedNames.length > 0 && rejectedNames.length > 0) {
+        conflicts.push({
+          jour: anySlot.jour,
+          debut: anySlot.debut,
+          fin: anySlot.debut, // approximation, plusieurs profs possibles à cet horaire
+          profName: 'plusieurs professeurs',
+          placedNames,
+          rejectedNames,
+        });
+      }
     }
-  });
+
+    // Empêche de re-choisir indéfiniment le même horaire s'il ne reste plus
+    // de terrain disponible dessus mais que des personnes n'ont pas pu être
+    // casées (elles seront retentées à un autre horaire, ou en phase 5).
+    if (entriesByTime[bestKey].length === 0) {
+      // rien à faire, la boucle passera naturellement à un autre horaire au tour suivant
+    }
+  }
+
 
   // ---------- Phase 5 : consolidation, faire rejoindre les non-casés ----------
   // À ce stade, certaines personnes peuvent rester non casées alors qu'un
