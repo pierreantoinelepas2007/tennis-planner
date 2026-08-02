@@ -64,13 +64,24 @@ function levenshteinDistance(a, b) {
   return dp[m][n];
 }
 
-// Deux noms "matchent" s'ils sont identiques après normalisation, ou si leur
+// Deux noms "matchent" s'ils sont identiques après normalisation, si leur
 // distance de Levenshtein reste faible par rapport à leur longueur (tolère 1
-// faute sur un nom court, jusqu'à 2 sur un nom plus long).
+// faute sur un nom court, jusqu'à 2 sur un nom plus long), ou si les mêmes
+// mots apparaissent dans un ordre différent (ex: "Jean-Yves Lepas" vs "Lepas
+// Jean-Yves") — un parent qui inscrit son enfant et un autre qui tape ce même
+// nom dans "veut jouer avec" n'écrivent pas toujours prénom puis nom dans le
+// même ordre.
 function namesMatch(a, b) {
   const na = norm(a), nb = norm(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
+
+  const wordsA = na.split(/\s+/).filter(Boolean).sort();
+  const wordsB = nb.split(/\s+/).filter(Boolean).sort();
+  if (wordsA.length > 1 && wordsA.length === wordsB.length && wordsA.every((w, i) => w === wordsB[i])) {
+    return true;
+  }
+
   const maxLen = Math.max(na.length, nb.length);
   // Noms très courts (3 caractères ou moins) : aucune tolérance, le risque de
   // confondre deux personnes différentes est trop élevé (ex: "Léa" vs "Léo").

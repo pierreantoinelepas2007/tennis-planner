@@ -427,8 +427,20 @@ app.post('/api/test/clear', requireAdmin, async (req, res) => {
 // ---------- Frontend statique (build React) ----------
 
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
-app.use(express.static(frontendDist));
+app.use(express.static(frontendDist, {
+  setHeaders: (res, filePath) => {
+    // index.html ne doit jamais être mis en cache par le navigateur : c'est
+    // lui qui référence les fichiers JS/CSS buildés (avec un nom unique par
+    // build), donc une version mise en cache pointerait vers d'anciens
+    // fichiers qui n'existent plus après un nouveau déploiement, laissant
+    // l'utilisateur bloqué sur une ancienne version du site sans le savoir.
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  },
+}));
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
 

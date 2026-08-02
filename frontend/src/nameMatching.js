@@ -26,10 +26,22 @@ export function levenshteinDistance(a, b) {
   return dp[m][n];
 }
 
+// Deux noms "matchent" s'ils sont identiques après normalisation, si leur
+// distance de Levenshtein reste faible par rapport à leur longueur, ou si les
+// mêmes mots apparaissent dans un ordre différent (ex: "Jean-Yves Lepas" vs
+// "Lepas Jean-Yves") — cohérent avec la logique utilisée côté serveur pour la
+// génération du planning (voir backend/planningEngine.js).
 export function namesMatch(a, b) {
   const na = normName(a), nb = normName(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
+
+  const wordsA = na.split(/\s+/).filter(Boolean).sort();
+  const wordsB = nb.split(/\s+/).filter(Boolean).sort();
+  if (wordsA.length > 1 && wordsA.length === wordsB.length && wordsA.every((w, i) => w === wordsB[i])) {
+    return true;
+  }
+
   const maxLen = Math.max(na.length, nb.length);
   if (maxLen <= 3) return false;
   const threshold = maxLen <= 6 ? 1 : 2;

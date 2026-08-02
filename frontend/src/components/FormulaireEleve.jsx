@@ -70,16 +70,11 @@ export default function FormulaireEleve({ onCreated }) {
   };
 
   const doSubmit = async () => {
-    console.log('[diag] doSubmit appelé, name=', name);
-    if (!name.trim() || submitting) {
-      console.log('[diag] arrêt précoce : nom vide ou déjà en soumission');
-      return;
-    }
+    if (!name.trim() || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      console.log('[diag] avant appel API');
-      const result = await api.createStudent({
+      await api.createStudent({
         name: name.trim(),
         age: age.trim(),
         classement: classement || 'Non classé',
@@ -89,17 +84,13 @@ export default function FormulaireEleve({ onCreated }) {
         profPrefere: profPrefere.trim(),
         disponibilites,
       });
-      console.log('[diag] API OK, résultat=', result);
       setLastSubmittedName(name.trim());
       setSubmitted(true);
-      console.log('[diag] setSubmitted(true) appelé');
       if (onCreated) onCreated();
     } catch (err) {
-      console.log('[diag] ERREUR CATCH:', err);
       setError("L'inscription n'a pas pu être enregistrée. Réessayez dans un instant.");
     } finally {
       setSubmitting(false);
-      console.log('[diag] finally, submitting=false');
     }
   };
 
