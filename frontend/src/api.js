@@ -63,6 +63,7 @@ export const api = {
 
   // Profs
   getProfs: () => request('/profs'),
+  getProfNames: () => request('/profs/names'),
   createProf: (data) => request('/profs', { method: 'POST', body: JSON.stringify(data) }),
   deleteProf: (id) => request(`/profs/${id}`, { method: 'DELETE' }),
   addProfDispo: (profId, data) => request(`/profs/${profId}/disponibilites`, { method: 'POST', body: JSON.stringify(data) }),

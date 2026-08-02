@@ -140,6 +140,19 @@ app.get('/api/profs', requireAdmin, async (req, res) => {
   }
 });
 
+// Route publique allégée (sans mot de passe), utilisée uniquement par le
+// formulaire d'inscription pour proposer la liste des noms de profs dans un
+// menu déroulant. Ne renvoie que les noms, aucune autre donnée.
+app.get('/api/profs/names', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT name FROM profs ORDER BY created_at ASC');
+    res.json(rows.map(r => r.name));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 app.post('/api/profs', requireAdmin, async (req, res) => {
   try {
     const { name, specialite } = req.body;

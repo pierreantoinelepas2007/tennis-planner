@@ -49,11 +49,32 @@ export default function GrilleDisponibilites({ value, onChange }) {
     setDragMode(null);
   };
 
+  // Sur mobile, un `touchstart` est suivi peu après d'un `mousedown` simulé
+  // par le navigateur pour la compatibilité avec le code souris — sans
+  // `preventDefault()`, la cellule serait cochée puis aussitôt décochée (ou
+  // l'inverse) par ce doublon d'événement, ce qui donne l'impression que le
+  // clic ne "prend" pas sur téléphone.
+  const handleTouchStart = (e, jour, heure) => {
+    e.preventDefault();
+    handleMouseDown(jour, heure);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging.current) return;
+    const touch = e.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (target && target.dataset && target.dataset.jour && target.dataset.heure) {
+      handleMouseEnter(target.dataset.jour, target.dataset.heure);
+    }
+  };
+
   return (
     <div
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      style={{ userSelect: 'none', overflowX: 'auto' }}
+      onTouchEnd={handleMouseUp}
+      onTouchMove={handleTouchMove}
+      style={{ userSelect: 'none', overflowX: 'auto', touchAction: 'none' }}
     >
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
         <thead>
@@ -78,12 +99,14 @@ export default function GrilleDisponibilites({ value, onChange }) {
                 return (
                   <td
                     key={jour}
+                    data-jour={jour}
+                    data-heure={heure}
                     onMouseDown={() => handleMouseDown(jour, heure)}
                     onMouseEnter={() => handleMouseEnter(jour, heure)}
-                    onTouchStart={() => handleMouseDown(jour, heure)}
+                    onTouchStart={(e) => handleTouchStart(e, jour, heure)}
                     style={{
                       width: 32,
-                      height: 22,
+                      height: 28,
                       border: '1px solid var(--border)',
                       background: isSelected ? 'var(--clay)' : 'var(--surface-1)',
                       cursor: 'pointer',
@@ -99,7 +122,7 @@ export default function GrilleDisponibilites({ value, onChange }) {
         </tbody>
       </table>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-        Cliquez sur les créneaux d'une heure où la personne est disponible (glissez pour en cocher plusieurs sur ordinateur).
+        Touchez (ou glissez) sur les créneaux d'une heure où la personne est disponible.
       </p>
     </div>
   );
