@@ -1,8 +1,37 @@
 const BASE = '/api';
+const TOKEN_KEY = 'tp:admin-token';
+
+export function getAdminToken() {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+export function setAdminToken(token) {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+  } catch (e) {
+    // ignore, l'utilisateur devra se reconnecter si le stockage est indisponible
+  }
+}
+
+export function clearAdminToken() {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch (e) {
+    // ignore
+  }
+}
 
 async function request(path, options = {}) {
+  const token = getAdminToken();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'x-admin-token': token } : {}),
+    },
     ...options,
   });
   if (!res.ok) {
@@ -13,6 +42,9 @@ async function request(path, options = {}) {
     } catch (e) {
       // ignore
     }
+    if (res.status === 401) {
+      clearAdminToken();
+    }
     throw new Error(message);
   }
   if (res.status === 204) return null;
@@ -20,6 +52,9 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // Authentification
+  login: (password) => request('/admin/login', { method: 'POST', body: JSON.stringify({ password }) }),
+
   // Students
   getStudents: () => request('/students'),
   createStudent: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),

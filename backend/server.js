@@ -15,9 +15,40 @@ app.use(express.json());
 
 const uid = () => crypto.randomBytes(6).toString('hex');
 
+// ---------- AUTHENTIFICATION ADMIN ----------
+// Un seul mot de passe partagé (toi + le prof), stocké en variable
+// d'environnement sur Render (jamais dans le code). Une fois connecté, le
+// navigateur reçoit un jeton simple à renvoyer pour les routes protégées. Le
+// formulaire d'inscription (POST /api/students) reste volontairement ouvert
+// à tous, sans authentification, puisque c'est la seule route destinée au
+// grand public.
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+const ADMIN_TOKEN = crypto.randomBytes(24).toString('hex'); // régénéré à chaque démarrage du serveur
+
+app.post('/api/admin/login', (req, res) => {
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).json({ error: "Aucun mot de passe n'est configuré côté serveur." });
+  }
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    res.json({ token: ADMIN_TOKEN });
+  } else {
+    res.status(401).json({ error: 'Mot de passe incorrect.' });
+  }
+});
+
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (!ADMIN_PASSWORD || token === ADMIN_TOKEN) {
+    return next();
+  }
+  res.status(401).json({ error: 'Accès réservé, connexion requise.' });
+}
+
 // ---------- STUDENTS ----------
 
-app.get('/api/students', async (req, res) => {
+app.get('/api/students', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM students ORDER BY created_at ASC');
     const { rows: dispoRows } = await pool.query('SELECT * FROM student_disponibilites');
@@ -67,7 +98,7 @@ app.post('/api/students', async (req, res) => {
   }
 });
 
-app.patch('/api/students/:id', async (req, res) => {
+app.patch('/api/students/:id', requireAdmin, async (req, res) => {
   try {
     const b = req.body;
     if ('niveauEtoile' in b) {
@@ -80,7 +111,7 @@ app.patch('/api/students/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/students/:id', async (req, res) => {
+app.delete('/api/students/:id', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM students WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
@@ -92,7 +123,7 @@ app.delete('/api/students/:id', async (req, res) => {
 
 // ---------- PROFS ----------
 
-app.get('/api/profs', async (req, res) => {
+app.get('/api/profs', requireAdmin, async (req, res) => {
   try {
     const { rows: profRows } = await pool.query('SELECT * FROM profs ORDER BY created_at ASC');
     const { rows: dispoRows } = await pool.query('SELECT * FROM prof_disponibilites');
@@ -109,7 +140,7 @@ app.get('/api/profs', async (req, res) => {
   }
 });
 
-app.post('/api/profs', async (req, res) => {
+app.post('/api/profs', requireAdmin, async (req, res) => {
   try {
     const { name, specialite } = req.body;
     const id = uid();
@@ -121,7 +152,7 @@ app.post('/api/profs', async (req, res) => {
   }
 });
 
-app.delete('/api/profs/:id', async (req, res) => {
+app.delete('/api/profs/:id', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT COUNT(*) FROM planning_blocks WHERE prof_id = $1', [req.params.id]);
     if (parseInt(rows[0].count, 10) > 0) {
@@ -135,7 +166,7 @@ app.delete('/api/profs/:id', async (req, res) => {
   }
 });
 
-app.post('/api/profs/:id/disponibilites', async (req, res) => {
+app.post('/api/profs/:id/disponibilites', requireAdmin, async (req, res) => {
   try {
     const { jour, debut, fin } = req.body;
     const id = uid();
@@ -148,7 +179,7 @@ app.post('/api/profs/:id/disponibilites', async (req, res) => {
   }
 });
 
-app.delete('/api/profs/:profId/disponibilites/:dispoId', async (req, res) => {
+app.delete('/api/profs/:profId/disponibilites/:dispoId', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM prof_disponibilites WHERE id = $1 AND prof_id = $2', [req.params.dispoId, req.params.profId]);
     res.json({ ok: true });
@@ -160,7 +191,7 @@ app.delete('/api/profs/:profId/disponibilites/:dispoId', async (req, res) => {
 
 // ---------- COURTS ----------
 
-app.get('/api/courts', async (req, res) => {
+app.get('/api/courts', requireAdmin, async (req, res) => {
   try {
     const { rows: courtRows } = await pool.query('SELECT * FROM courts ORDER BY created_at ASC');
     const { rows: slotRows } = await pool.query('SELECT * FROM court_slots');
@@ -176,7 +207,7 @@ app.get('/api/courts', async (req, res) => {
   }
 });
 
-app.post('/api/courts', async (req, res) => {
+app.post('/api/courts', requireAdmin, async (req, res) => {
   try {
     const { name } = req.body;
     const id = uid();
@@ -188,7 +219,7 @@ app.post('/api/courts', async (req, res) => {
   }
 });
 
-app.delete('/api/courts/:id', async (req, res) => {
+app.delete('/api/courts/:id', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT COUNT(*) FROM planning_blocks WHERE court_id = $1', [req.params.id]);
     if (parseInt(rows[0].count, 10) > 0) {
@@ -202,7 +233,7 @@ app.delete('/api/courts/:id', async (req, res) => {
   }
 });
 
-app.post('/api/courts/:id/slots', async (req, res) => {
+app.post('/api/courts/:id/slots', requireAdmin, async (req, res) => {
   try {
     const { jour, debut, fin } = req.body;
     const id = uid();
@@ -215,7 +246,7 @@ app.post('/api/courts/:id/slots', async (req, res) => {
   }
 });
 
-app.delete('/api/courts/:courtId/slots/:slotId', async (req, res) => {
+app.delete('/api/courts/:courtId/slots/:slotId', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM court_slots WHERE id = $1 AND court_id = $2', [req.params.slotId, req.params.courtId]);
     res.json({ ok: true });
@@ -227,7 +258,7 @@ app.delete('/api/courts/:courtId/slots/:slotId', async (req, res) => {
 
 // ---------- PLANNING ----------
 
-app.get('/api/planning', async (req, res) => {
+app.get('/api/planning', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM planning_blocks ORDER BY created_at ASC');
     const blocks = rows.map(r => ({
@@ -249,7 +280,7 @@ app.get('/api/planning', async (req, res) => {
   }
 });
 
-app.post('/api/planning/generate', async (req, res) => {
+app.post('/api/planning/generate', requireAdmin, async (req, res) => {
   try {
     const { rows: studentRows } = await pool.query('SELECT * FROM students');
     const { rows: studentDispoRows } = await pool.query('SELECT * FROM student_disponibilites');
@@ -313,7 +344,7 @@ app.post('/api/planning/generate', async (req, res) => {
   }
 });
 
-app.patch('/api/planning/:id', async (req, res) => {
+app.patch('/api/planning/:id', requireAdmin, async (req, res) => {
   try {
     const b = req.body;
     const fields = [];
@@ -333,7 +364,7 @@ app.patch('/api/planning/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/planning/:id', async (req, res) => {
+app.delete('/api/planning/:id', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM planning_blocks WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
@@ -347,7 +378,7 @@ app.delete('/api/planning/:id', async (req, res) => {
 // Déclenché manuellement via /api/test/seed?key=demo pour insérer 21 participants
 // fictifs variés, et /api/test/clear?key=demo pour tout retirer proprement.
 
-app.post('/api/test/seed', async (req, res) => {
+app.post('/api/test/seed', requireAdmin, async (req, res) => {
   if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
   try {
     const ids = await seedTestStudents(pool);
@@ -358,7 +389,7 @@ app.post('/api/test/seed', async (req, res) => {
   }
 });
 
-app.post('/api/test/clear', async (req, res) => {
+app.post('/api/test/clear', requireAdmin, async (req, res) => {
   if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
   try {
     const testNames = [

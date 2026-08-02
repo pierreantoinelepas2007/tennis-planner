@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from './api.js';
+import { api, getAdminToken, clearAdminToken } from './api.js';
 import Header from './components/Header.jsx';
 import Accueil from './components/Accueil.jsx';
 import FormulaireEleve from './components/FormulaireEleve.jsx';
@@ -8,6 +8,7 @@ import AdminProfs from './components/AdminProfs.jsx';
 import AdminTerrains from './components/AdminTerrains.jsx';
 import Planning from './components/Planning.jsx';
 import VueProf from './components/VueProf.jsx';
+import AdminLogin from './components/AdminLogin.jsx';
 
 const VALID_TABS = ['accueil', 'formulaire', 'admin-eleves', 'admin-profs', 'admin-terrains', 'planning', 'vue-prof'];
 
@@ -24,14 +25,22 @@ function getInitialTab() {
 
 export default function App() {
   const [tab, setTab] = useState(getInitialTab);
+  // Le formulaire est la seule partie accessible sans connexion. Si l'onglet
+  // demandé dans l'URL est le formulaire, on n'affiche pas l'écran de
+  // connexion par défaut ; pour tout autre onglet (y compris l'accueil), la
+  // connexion est requise.
+  const [showLogin, setShowLogin] = useState(getInitialTab() !== 'formulaire');
+  const [isAdmin, setIsAdmin] = useState(!!getAdminToken());
   const [students, setStudents] = useState([]);
   const [profs, setProfs] = useState([]);
   const [courts, setCourts] = useState([]);
   const [planning, setPlanning] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const refreshAll = useCallback(async () => {
+    if (!isAdmin) return;
+    setLoading(true);
     try {
       setError(null);
       const [s, p, c, pl] = await Promise.all([
@@ -46,15 +55,49 @@ export default function App() {
       setPlanning(pl);
     } catch (e) {
       console.error(e);
-      setError("Impossible de charger les données. Vérifiez la connexion au serveur.");
+      if (e.message && e.message.includes('401')) {
+        // Le jeton n'est plus valide (ex : serveur redémarré) : retour à l'écran de connexion.
+        clearAdminToken();
+        setIsAdmin(false);
+      } else {
+        setError("Impossible de charger les données. Vérifiez la connexion au serveur.");
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    if (isAdmin) refreshAll();
+  }, [isAdmin, refreshAll]);
+
+  // Le formulaire d'inscription est utilisable par tout le monde, sans
+  // connexion, et sans afficher le reste de la navigation du site.
+  if (!isAdmin && tab === 'formulaire' && !showLogin) {
+    return (
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 16px 48px' }}>
+        <div style={{ paddingTop: 24, marginBottom: '1rem' }}>
+          <h1 style={{ margin: 0, fontSize: 24 }}>Planificateur école de tennis</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Inscription à un cours</p>
+        </div>
+        <FormulaireEleve onCreated={() => {}} />
+        <p style={{ textAlign: 'center', marginTop: 24 }}>
+          <button onClick={() => setShowLogin(true)} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--text-muted)' }}>
+            Accès professeur
+          </button>
+        </p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <AdminLogin
+        onSuccess={() => { setIsAdmin(true); setShowLogin(false); setTab('accueil'); }}
+        onCancel={() => { setShowLogin(false); setTab('formulaire'); }}
+      />
+    );
+  }
 
   if (loading) {
     return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Chargement...</div>;

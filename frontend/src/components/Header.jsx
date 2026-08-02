@@ -1,4 +1,5 @@
 import React from 'react';
+import { clearAdminToken } from '../api.js';
 
 const TABS = [
   { id: 'accueil', label: 'Accueil', icon: 'ti-home' },
@@ -11,11 +12,21 @@ const TABS = [
 ];
 
 export default function Header({ tab, setTab }) {
+  const logout = () => {
+    clearAdminToken();
+    window.location.reload();
+  };
+
   return (
     <div style={{ marginBottom: '1.5rem', paddingTop: 24 }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <h1 style={{ margin: 0, fontSize: 24 }}>Planificateur école de tennis</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Cours, groupes et terrains — saison septembre à mai</p>
+      <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 24 }}>Planificateur école de tennis</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Cours, groupes et terrains — saison septembre à mai</p>
+        </div>
+        <button onClick={logout} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--text-muted)' }}>
+          Se déconnecter
+        </button>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
         {TABS.map(t => (
