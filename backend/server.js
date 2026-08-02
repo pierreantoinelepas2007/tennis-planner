@@ -406,10 +406,10 @@ app.post('/api/test/clear', requireAdmin, async (req, res) => {
   if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
   try {
     const testNames = [
-      'Léa Dupont', 'Tom Dupont', 'Manon Petit', 'Hugo Petit', 'Emma Lefevre', 'Chloé Bernard',
-      'Nathan Girard', 'Louis Girard', 'Adam Roux', 'Zoé Martin', 'Noah Simon', 'Sarah Moreau',
-      'Gabriel Laurent', 'Inès Fabre', 'Théo Blanc', 'Rose Fontaine', 'Sacha Perrin', 'Louna Dubois',
-      'Mathis Renard', 'Alice Colin', 'Ethan Faure',
+      'Adam Roux', 'Alice Colin', 'Bernard Alice', 'Colin Nathan', 'Dupont Marc', 'Ethan Faure',
+      'Inès Fabre', 'Jean-Yves Lepas', 'Lepas Sophie', 'Louis Girard', 'Léa Renard',
+      'Marie-Claire Dupont-Martin', 'Mathis Renard', 'Nathan Girard', 'Rose Fontaine',
+      'Sacha Perrin', 'Sarah Moreau', 'Théo Blanc', 'Tom Renard', 'Zoé Martin',
     ];
     const { rows } = await pool.query('SELECT id FROM students WHERE name = ANY($1)', [testNames]);
     const ids = rows.map(r => r.id);
