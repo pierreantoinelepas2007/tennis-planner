@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card } from './Common.jsx';
 import { api } from '../api.js';
+import { summarizeDisponibilites } from '../dispoFormat.js';
 
 const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const HEURES = Array.from({ length: 14 }, (_, i) => `${(8 + i).toString().padStart(2, '0')}:00`);
@@ -159,11 +160,16 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
         {unplacedStudents.length === 0 ? (
           <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>Tout le monde a un créneau.</p>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {unplacedStudents.map(s => (
-              <span key={s.id} style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)', padding: '4px 10px', borderRadius: 6, fontSize: 13 }}>
-                {s.name}
-              </span>
+              <div key={s.id} style={{ background: 'var(--danger-bg)', color: 'var(--danger-text)', padding: '6px 12px', borderRadius: 6, fontSize: 13 }}>
+                <span style={{ fontWeight: 600 }}>{s.name}</span>
+                {s.disponibilites?.length > 0 ? (
+                  <span> — {summarizeDisponibilites(s.disponibilites)}</span>
+                ) : (
+                  <span> — aucune disponibilité renseignée</span>
+                )}
+              </div>
             ))}
           </div>
         )}
