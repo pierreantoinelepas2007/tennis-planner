@@ -78,6 +78,7 @@ export const api = {
 
   // Planning
   getPlanning: () => request('/planning'),
+  createPlanningBlock: (data) => request('/planning', { method: 'POST', body: JSON.stringify(data) }),
   generatePlanning: () => request('/planning/generate', { method: 'POST' }),
   updatePlanningBlock: (id, patch) => request(`/planning/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deletePlanningBlock: (id) => request(`/planning/${id}`, { method: 'DELETE' }),

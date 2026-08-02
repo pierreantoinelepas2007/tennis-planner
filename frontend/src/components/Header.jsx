@@ -8,6 +8,7 @@ const TABS = [
   { id: 'admin-profs', label: 'Professeurs', icon: 'ti-user' },
   { id: 'admin-terrains', label: 'Terrains', icon: 'ti-square' },
   { id: 'planning', label: 'Planning', icon: 'ti-calendar' },
+  { id: 'disponibilites', label: 'Disponibilités restantes', icon: 'ti-calendar-stats' },
   { id: 'vue-prof', label: 'Vue par prof', icon: 'ti-file-export' },
 ];
 

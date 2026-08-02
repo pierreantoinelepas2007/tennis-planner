@@ -293,6 +293,44 @@ app.get('/api/planning', requireAdmin, async (req, res) => {
   }
 });
 
+// Création manuelle d'un cours (utilisée depuis la vue "Disponibilités
+// restantes", pour placer directement un participant non casé sur un
+// créneau encore libre, sans passer par une génération automatique
+// complète). Vérifie qu'aucun autre cours n'occupe déjà ce terrain ou ce
+// prof à ce même horaire, pour ne jamais créer de double réservation.
+app.post('/api/planning', requireAdmin, async (req, res) => {
+  try {
+    const b = req.body;
+    if (!b.courtId || !b.profId || !b.jour || !b.debut || !b.fin) {
+      return res.status(400).json({ error: 'Informations de créneau incomplètes.' });
+    }
+    const { rows: courtConflict } = await pool.query(
+      'SELECT id FROM planning_blocks WHERE court_id = $1 AND jour = $2 AND debut = $3 AND fin = $4',
+      [b.courtId, b.jour, b.debut, b.fin]
+    );
+    if (courtConflict.length > 0) {
+      return res.status(409).json({ error: 'Ce terrain est déjà utilisé à ce créneau.' });
+    }
+    const { rows: profConflict } = await pool.query(
+      'SELECT id FROM planning_blocks WHERE prof_id = $1 AND jour = $2 AND debut = $3 AND fin = $4',
+      [b.profId, b.jour, b.debut, b.fin]
+    );
+    if (profConflict.length > 0) {
+      return res.status(409).json({ error: 'Ce professeur est déjà occupé à ce créneau.' });
+    }
+    const id = uid();
+    await pool.query(
+      `INSERT INTO planning_blocks (id, court_id, prof_id, jour, debut, fin, student_ids, score, locked)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)`,
+      [id, b.courtId, b.profId, b.jour, b.debut, b.fin, JSON.stringify(b.studentIds || []), 0]
+    );
+    res.status(201).json({ id });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur lors de la création du cours.' });
+  }
+});
+
 app.post('/api/planning/generate', requireAdmin, async (req, res) => {
   try {
     const { rows: studentRows } = await pool.query('SELECT * FROM students');

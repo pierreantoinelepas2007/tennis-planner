@@ -7,10 +7,11 @@ import AdminEleves from './components/AdminEleves.jsx';
 import AdminProfs from './components/AdminProfs.jsx';
 import AdminTerrains from './components/AdminTerrains.jsx';
 import Planning from './components/Planning.jsx';
+import DisponibilitesRestantes from './components/DisponibilitesRestantes.jsx';
 import VueProf from './components/VueProf.jsx';
 import AdminLogin from './components/AdminLogin.jsx';
 
-const VALID_TABS = ['accueil', 'formulaire', 'admin-eleves', 'admin-profs', 'admin-terrains', 'planning', 'vue-prof'];
+const VALID_TABS = ['accueil', 'formulaire', 'admin-eleves', 'admin-profs', 'admin-terrains', 'planning', 'disponibilites', 'vue-prof'];
 
 function getInitialTab() {
   try {
@@ -123,6 +124,15 @@ export default function App() {
         {tab === 'admin-terrains' && <AdminTerrains courts={courts} onChanged={refreshAll} />}
         {tab === 'planning' && (
           <Planning
+            students={students}
+            profs={profs}
+            courts={courts}
+            planning={planning}
+            onChanged={refreshAll}
+          />
+        )}
+        {tab === 'disponibilites' && (
+          <DisponibilitesRestantes
             students={students}
             profs={profs}
             courts={courts}
