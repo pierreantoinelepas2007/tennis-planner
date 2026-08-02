@@ -127,6 +127,30 @@ function classementIndex(raw) {
   return idx === -1 ? null : idx;
 }
 
+// Correspondance entre le niveau étoile (saisi par le prof, 1 à 5) et un
+// échelon approximatif de l'échelle de classement belge, pour permettre de
+// comparer directement un élève classé à un élève seulement noté en étoiles
+// (ex: un 5★ peut être proche d'un joueur classé B0, en début de 2e série).
+const ETOILE_TO_CLASSEMENT_INDEX = {
+  1: CLASSEMENT_ECHELLE.indexOf('NC'),      // débutant complet
+  2: CLASSEMENT_ECHELLE.indexOf('C30.3'),   // débutant avec des bases
+  3: CLASSEMENT_ECHELLE.indexOf('C30'),     // intermédiaire
+  4: CLASSEMENT_ECHELLE.indexOf('C15.2'),   // bon niveau
+  5: CLASSEMENT_ECHELLE.indexOf('B0'),      // très bon niveau club
+};
+
+// Indice de niveau unifié pour une personne, quelle que soit la façon dont
+// son niveau est connu : classement officiel en priorité, sinon conversion
+// de son étoile vers l'échelle de classement, sinon null (niveau inconnu).
+function levelIndex(student) {
+  const fromClassement = classementIndex(student.classement);
+  if (fromClassement != null) return fromClassement;
+  if (student.niveau_etoile != null && ETOILE_TO_CLASSEMENT_INDEX[student.niveau_etoile] != null) {
+    return ETOILE_TO_CLASSEMENT_INDEX[student.niveau_etoile];
+  }
+  return null;
+}
+
 // students: lignes de la table students, avec jouer_avec déjà parsé en tableau JS
 // profs: lignes de profs, chacune avec .disponibilites (tableau de {jour, debut, fin})
 // courts: lignes de courts
@@ -201,14 +225,17 @@ function generatePlanningProposal(students, profs, courts, slots) {
   // l'échelle belge ; à défaut, on se rabat sur l'écart d'étoiles (saisies
   // par le prof), à 1 étoile d'écart maximum ; si aucune des deux infos n'est
   // disponible pour l'un des deux, on ne bloque pas le rapprochement.
+  // Deux personnes sont de niveau proche si leur indice de niveau unifié
+  // (classement officiel en priorité, sinon étoile convertie sur la même
+  // échelle) est à 2 échelons d'écart maximum. Ça permet par exemple à un 5★
+  // de jouer avec un classé B0, puisque 5★ correspond justement à ce niveau.
+  // Si le niveau est inconnu pour l'un des deux, on ne bloque pas le
+  // rapprochement (pas assez d'information pour juger).
   const levelClose = (a, b) => {
-    const ca = classementIndex(a.classement);
-    const cb = classementIndex(b.classement);
-    if (ca != null && cb != null) {
-      return Math.abs(ca - cb) <= 2;
-    }
-    if (a.niveau_etoile == null || b.niveau_etoile == null) return true;
-    return Math.abs(a.niveau_etoile - b.niveau_etoile) <= 1;
+    const la = levelIndex(a);
+    const lb = levelIndex(b);
+    if (la == null || lb == null) return true;
+    return Math.abs(la - lb) <= 2;
   };
 
   // Jours où `student` a au moins un créneau coché dans sa grille de
@@ -531,14 +558,27 @@ function generatePlanningProposal(students, profs, courts, slots) {
     });
 
     const remaining = candidates.filter(s => !used.has(s.id));
-    remaining.forEach(s => {
+    // Pour maximiser le nombre de personnes casées, on trie les candidats
+    // restants par niveau (indice unifié classement/étoile) avant de les
+    // regrouper : ça place naturellement côte à côte, dans la liste, les
+    // personnes de niveaux voisins, ce qui permet de former des groupes plus
+    // grands et plus cohérents que de traiter les candidats dans un ordre
+    // arbitraire.
+    const remainingSorted = [...remaining].sort((a, b) => {
+      const la = levelIndex(a), lb = levelIndex(b);
+      if (la == null && lb == null) return 0;
+      if (la == null) return 1;
+      if (lb == null) return -1;
+      return la - lb;
+    });
+    remainingSorted.forEach(s => {
       if (used.has(s.id)) return;
-      const similarLevel = remaining.filter(o =>
+      const similarLevel = remainingSorted.filter(o =>
         o.id !== s.id && !used.has(o.id) && levelClose(s, o) && !isSameScheduleLinked(s, o)
       );
       const members = [s, ...similarLevel].slice(0, 4);
       members.forEach(m => used.add(m.id));
-      groups.push({ members, score: 1 + members.reduce((acc, m) => acc + scoreProf(m, prof), 0) });
+      groups.push({ members, score: 1 + members.length + members.reduce((acc, m) => acc + scoreProf(m, prof), 0) });
     });
 
     if (groups.length === 0) return;
@@ -588,6 +628,56 @@ function generatePlanningProposal(students, profs, courts, slots) {
         rejectedNames,
       });
     }
+  });
+
+  // ---------- Phase 5 : consolidation, faire rejoindre les non-casés ----------
+  // À ce stade, certaines personnes peuvent rester non casées alors qu'un
+  // groupe déjà formé, au même horaire, avait de la place et un niveau
+  // compatible — l'algo glouton des phases précédentes traite les créneaux
+  // dans un ordre fixe et ne revient jamais en arrière pour optimiser le
+  // remplissage. Cette dernière passe répare ce cas : pour chaque personne
+  // encore non casée, on cherche le meilleur bloc existant (non verrouillé,
+  // pas individuel, moins de 4 membres, niveau compatible, disponibilité
+  // confirmée) qu'elle pourrait rejoindre, et on l'y ajoute.
+  const studentsById = Object.fromEntries(students.map(s => [s.id, s]));
+
+  Array.from(unplaced).forEach(studentId => {
+    const s = studentsById[studentId];
+    if (!s) return;
+    if (s.preference_groupe === 'individuel') return; // ne rejoint jamais un cours groupe existant
+
+    const key = norm(s.name);
+    const usedDays = daysUsedByName[key];
+
+    const candidateBlocks = result.filter(block => {
+      if (block.locked) return false;
+      if (block.studentIds.length === 0 || block.studentIds.length >= 4) return false;
+      if (usedDays && usedDays.has(block.jour)) return false;
+      if (!studentAvailableForSlot(s, block.jour, block.debut, block.fin)) return false;
+      const members = block.studentIds.map(id => studentsById[id]).filter(Boolean);
+      if (members.length === 0) return false;
+      // Le bloc existant doit être un vrai cours de groupe (pas un individuel
+      // déjà occupé) et le niveau doit rester cohérent avec TOUS ses membres.
+      if (members.some(m => m.preference_groupe === 'individuel')) return false;
+      if (!members.every(m => levelClose(s, m) && !isSameScheduleLinked(s, m))) return false;
+      return true;
+    });
+
+    if (candidateBlocks.length === 0) return;
+
+    // Priorité au bloc le moins rempli en premier (répartit mieux), puis à
+    // la meilleure correspondance de préférence de prof.
+    candidateBlocks.sort((a, b) => {
+      const scoreA = a.studentIds.length + (s.prof_prefere && namesMatch(profs.find(p => p.id === a.profId)?.name || '', s.prof_prefere) ? -0.5 : 0);
+      const scoreB = b.studentIds.length + (s.prof_prefere && namesMatch(profs.find(p => p.id === b.profId)?.name || '', s.prof_prefere) ? -0.5 : 0);
+      return scoreA - scoreB;
+    });
+
+    const target = candidateBlocks[0];
+    target.studentIds.push(s.id);
+    unplaced.delete(s.id);
+    if (!daysUsedByName[key]) daysUsedByName[key] = new Set();
+    daysUsedByName[key].add(target.jour);
   });
 
   return {
