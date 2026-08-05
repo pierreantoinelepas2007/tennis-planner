@@ -56,6 +56,7 @@ app.get('/api/students', requireAdmin, async (req, res) => {
       id: r.id,
       name: r.name,
       age: r.age,
+      dateNaissance: r.date_naissance ? r.date_naissance.toISOString().slice(0, 10) : null,
       classement: r.classement,
       niveauEtoile: r.niveau_etoile,
       preferenceGroupe: r.preference_groupe,
@@ -79,11 +80,25 @@ app.post('/api/students', async (req, res) => {
       return res.status(400).json({ error: 'Le nom est obligatoire.' });
     }
     const id = uid();
+    // Calcule l'âge à partir de la date de naissance si elle est fournie
+    // (stockée aussi séparément en base pour recalculer l'âge exact à tout
+    // moment, même d'une saison à l'autre).
+    let computedAge = b.age || null;
+    if (b.dateNaissance) {
+      const birth = new Date(b.dateNaissance);
+      if (!Number.isNaN(birth.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+        computedAge = String(age);
+      }
+    }
     await client.query('BEGIN');
     await client.query(
-      `INSERT INTO students (id, name, age, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, b.name.trim(), b.age || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
+      `INSERT INTO students (id, name, age, date_naissance, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, b.name.trim(), computedAge, b.dateNaissance || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
         JSON.stringify(b.jouerAvec || []), b.memeHoraireAvec || null, b.profPrefere || null]
     );
     const disponibilites = Array.isArray(b.disponibilites) ? b.disponibilites : [];

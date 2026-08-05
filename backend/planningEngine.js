@@ -217,11 +217,6 @@ function generatePlanningProposal(students, profs, courts, slots) {
     (a.jouer_avec || []).some(n => namesMatch(n, b.name)) ||
     (b.jouer_avec || []).some(n => namesMatch(n, a.name));
 
-  // Deux personnes liées par "terrain à côté de" ont explicitement demandé
-  // des cours SÉPARÉS mais rapprochés physiquement (ex: fratrie de niveaux
-  // différents) — cette relation est distincte de "veut jouer avec" et ne
-  // doit jamais les faire fusionner dans le même cours, même si leur niveau
-  // est proche par ailleurs.
   // Deux personnes liées par "même horaire que" ont explicitement demandé
   // des cours SÉPARÉS mais au même horaire (ex: deux parents qui viennent
   // ensemble) — cette relation est distincte de "veut jouer avec" et ne doit
@@ -231,11 +226,6 @@ function generatePlanningProposal(students, profs, courts, slots) {
     namesMatch(a.meme_horaire_avec || '', b.name) ||
     namesMatch(b.meme_horaire_avec || '', a.name);
 
-  // Deux élèves sont de niveau proche si leurs classements officiels (quand
-  // les deux en ont un reconnu) sont à 2 échelons d'écart maximum sur
-  // l'échelle belge ; à défaut, on se rabat sur l'écart d'étoiles (saisies
-  // par le prof), à 1 étoile d'écart maximum ; si aucune des deux infos n'est
-  // disponible pour l'un des deux, on ne bloque pas le rapprochement.
   // Deux personnes sont de niveau proche si leur indice de niveau unifié
   // (classement officiel en priorité, sinon étoile convertie sur la même
   // échelle) est à 2 échelons d'écart maximum. Ça permet par exemple à un 5★
@@ -247,6 +237,27 @@ function generatePlanningProposal(students, profs, courts, slots) {
     const lb = levelIndex(b);
     if (la == null || lb == null) return true;
     return Math.abs(la - lb) <= 2;
+  };
+
+  // Catégorie d'âge officielle du club (Baby-tennis / Mini-tennis / Tennis),
+  // déterminée à partir de l'âge saisi dans le formulaire. Le club exige des
+  // groupes strictement homogènes en âge, en plus du niveau : jamais un
+  // Baby-tennis avec un Mini-tennis, même si leur niveau de jeu est proche.
+  // Si l'âge n'est pas renseigné ou n'est pas un nombre exploitable, on ne
+  // bloque pas le rapprochement (pas assez d'information pour juger).
+  const ageCategory = (student) => {
+    const age = parseInt(student.age, 10);
+    if (Number.isNaN(age)) return null;
+    if (age <= 4) return 'baby';
+    if (age <= 8) return 'mini';
+    return 'tennis';
+  };
+
+  const sameAgeCategory = (a, b) => {
+    const ca = ageCategory(a);
+    const cb = ageCategory(b);
+    if (ca == null || cb == null) return true;
+    return ca === cb;
   };
 
   // Jours où `student` a au moins un créneau coché dans sa grille de
@@ -280,7 +291,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       changed = false;
       for (const candidate of groupable) {
         if (visited.has(candidate.id)) continue;
-        if (members.some(m => wantsToPlayWith(m, candidate)) && members.every(m => levelClose(m, candidate)) && members.every(m => !isSameScheduleLinked(m, candidate))) {
+        if (members.some(m => wantsToPlayWith(m, candidate)) && members.every(m => levelClose(m, candidate)) && members.every(m => sameAgeCategory(m, candidate)) && members.every(m => !isSameScheduleLinked(m, candidate))) {
           members.push(candidate);
           visited.add(candidate.id);
           changed = true;
@@ -543,7 +554,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       if (s.preference_groupe === 'individuel') return;
       const compatibles = availableHere.filter(o =>
         o.id !== s.id && o.preference_groupe !== 'individuel' &&
-        levelClose(s, o) && !isSameScheduleLinked(s, o)
+        levelClose(s, o) && sameAgeCategory(s, o) && !isSameScheduleLinked(s, o)
       );
       best = Math.max(best, Math.min(4, compatibles.length + 1));
     });
@@ -642,7 +653,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       if (used.has(s.id) || s.preference_groupe === 'individuel') return;
       const partners = candidates.filter(o =>
         o.id !== s.id && !used.has(o.id) && o.preference_groupe !== 'individuel' &&
-        wantsToPlayWith(s, o) && levelClose(s, o) && !isSameScheduleLinked(s, o)
+        wantsToPlayWith(s, o) && levelClose(s, o) && sameAgeCategory(s, o) && !isSameScheduleLinked(s, o)
       );
       if (partners.length === 0) return;
       const members = [s, ...partners].slice(0, 4);
@@ -663,7 +674,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
     remainingSorted.forEach(s => {
       if (used.has(s.id)) return;
       const similarLevel = remainingSorted.filter(o =>
-        o.id !== s.id && !used.has(o.id) && levelClose(s, o) && !isSameScheduleLinked(s, o)
+        o.id !== s.id && !used.has(o.id) && levelClose(s, o) && sameAgeCategory(s, o) && !isSameScheduleLinked(s, o)
       );
       const members = [s, ...similarLevel].slice(0, 4);
       members.forEach(m => used.add(m.id));
@@ -815,7 +826,7 @@ function generatePlanningProposal(students, profs, courts, slots) {
       // Le bloc existant doit être un vrai cours de groupe (pas un individuel
       // déjà occupé) et le niveau doit rester cohérent avec TOUS ses membres.
       if (members.some(m => m.preference_groupe === 'individuel')) return false;
-      if (!members.every(m => levelClose(s, m) && !isSameScheduleLinked(s, m))) return false;
+      if (!members.every(m => levelClose(s, m) && sameAgeCategory(s, m) && !isSameScheduleLinked(s, m))) return false;
       return true;
     });
 

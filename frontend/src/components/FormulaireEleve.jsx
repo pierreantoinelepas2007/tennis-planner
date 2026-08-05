@@ -35,9 +35,63 @@ const CLASSEMENT_OPTIONS = [
   { value: 'A international', label: 'A international' },
 ];
 
+// Horaires officiels du club par catégorie d'âge (extraits du flyer
+// d'inscription 2026-2027). Chaque entrée liste les heures de DÉBUT des
+// créneaux d'une heure disponibles ce jour-là pour la catégorie.
+const CATEGORY_SCHEDULES = {
+  baby: { Samedi: [10, 11] },
+  mini: {
+    Mardi: [16, 17, 18],
+    Mercredi: [13, 14, 15, 16, 17],
+    Jeudi: [16, 17],
+    Vendredi: [16, 17, 18],
+    Samedi: [10, 11, 12, 13, 14, 15, 16],
+  },
+  tennis: {
+    Lundi: [18],
+    Mardi: [16, 17, 18, 19],
+    Mercredi: [13, 14, 15, 16, 17, 18, 19],
+    Jeudi: [16, 17, 18],
+    Vendredi: [16, 17, 18, 19],
+    Samedi: [12, 13, 14, 15, 16, 17],
+  },
+};
+
+const CATEGORY_LABELS = {
+  baby: 'Baby-tennis (2022 et après)',
+  mini: 'Mini-tennis (2018-2021)',
+  tennis: 'Tennis (2017 et avant)',
+};
+
+// Détermine la catégorie d'âge officielle du club à partir d'une date de
+// naissance, cohérent avec le calcul fait côté serveur (voir
+// backend/planningEngine.js, fonction ageCategory).
+function computeAgeCategory(dateNaissance) {
+  if (!dateNaissance) return null;
+  const birth = new Date(dateNaissance);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  if (age <= 4) return 'baby';
+  if (age <= 8) return 'mini';
+  return 'tennis';
+}
+
+function allowedSlotsForCategory(category) {
+  const schedule = CATEGORY_SCHEDULES[category];
+  if (!schedule) return null;
+  const slots = [];
+  Object.entries(schedule).forEach(([jour, heures]) => {
+    heures.forEach(h => slots.push({ jour, heure: `${h.toString().padStart(2, '0')}:00` }));
+  });
+  return slots;
+}
+
 export default function FormulaireEleve({ onCreated }) {
   const [name, setName] = useState('');
-  const [age, setAge] = useState('');
+  const [dateNaissance, setDateNaissance] = useState('');
   const [classement, setClassement] = useState('');
   const [preference, setPreference] = useState('indifferent');
   const [jouerAvec, setJouerAvec] = useState('');
@@ -65,9 +119,12 @@ export default function FormulaireEleve({ onCreated }) {
   // Réinitialise tout le formulaire : utilisé quand on inscrit une nouvelle
   // personne différente.
   const resetAll = () => {
-    setName(''); setAge(''); setClassement('');
+    setName(''); setDateNaissance(''); setClassement('');
     resetCourseFields();
   };
+
+  const ageCategory = computeAgeCategory(dateNaissance);
+  const allowedSlots = ageCategory ? allowedSlotsForCategory(ageCategory) : null;
 
   const doSubmit = async () => {
     if (!name.trim() || submitting) return;
@@ -76,7 +133,7 @@ export default function FormulaireEleve({ onCreated }) {
     try {
       await api.createStudent({
         name: name.trim(),
-        age: age.trim(),
+        dateNaissance: dateNaissance || null,
         classement: classement || 'Non classé',
         preferenceGroupe: preference,
         jouerAvec: jouerAvec.split(',').map(s => s.trim()).filter(Boolean),
@@ -146,7 +203,20 @@ export default function FormulaireEleve({ onCreated }) {
 
             <form onSubmit={submit}>
               <TextField label="Nom" value={name} onChange={setName} placeholder="Prénom et nom" />
-              <TextField label="Âge" value={age} onChange={setAge} placeholder="Ex : 11" />
+              <label style={{ display: 'block', marginBottom: 18 }}>
+                <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>Date de naissance</span>
+                <input
+                  type="date"
+                  value={dateNaissance}
+                  onChange={e => setDateNaissance(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+                {ageCategory && (
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Catégorie : {CATEGORY_LABELS[ageCategory]}
+                  </span>
+                )}
+              </label>
               <SelectField
                 label="Classement officiel"
                 value={classement}
@@ -191,7 +261,13 @@ export default function FormulaireEleve({ onCreated }) {
 
               <div style={{ marginBottom: 18 }}>
                 <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Disponibilités</span>
-                <GrilleDisponibilites value={disponibilites} onChange={setDisponibilites} />
+                {!dateNaissance ? (
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Indiquez d'abord la date de naissance pour voir les créneaux disponibles pour cette catégorie.
+                  </p>
+                ) : (
+                  <GrilleDisponibilites value={disponibilites} onChange={setDisponibilites} allowedSlots={allowedSlots} />
+                )}
               </div>
 
               <button type="submit" disabled={submitting} style={{ width: '100%' }}>

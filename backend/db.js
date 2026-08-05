@@ -20,6 +20,7 @@ async function initDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       age TEXT,
+      date_naissance DATE,
       classement TEXT,
       niveau_etoile INTEGER,
       preference_groupe TEXT,
@@ -29,6 +30,12 @@ async function initDb() {
       dispo_text TEXT,
       created_at TIMESTAMPTZ DEFAULT now()
     );
+  `);
+
+  // Migration : ajoute la colonne "date_naissance" si la table existait déjà
+  // avant son introduction (ne fait rien si elle est déjà présente).
+  await pool.query(`
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS date_naissance DATE;
   `);
 
   await pool.query(`

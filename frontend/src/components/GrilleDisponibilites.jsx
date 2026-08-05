@@ -1,7 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 
-const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-const HEURES = Array.from({ length: 14 }, (_, i) => `${(8 + i).toString().padStart(2, '0')}:00`);
+const ALL_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const ALL_HEURES = Array.from({ length: 14 }, (_, i) => `${(8 + i).toString().padStart(2, '0')}:00`);
 
 function cellKey(jour, heure) {
   return `${jour}|${heure}`;
@@ -10,10 +10,27 @@ function cellKey(jour, heure) {
 // Grille cliquable jour × heure pour saisir les disponibilités d'un participant.
 // value : tableau de { jour, heure }. onChange : appelé avec le nouveau tableau.
 // Le glisser-cliquer permet de cocher/décocher plusieurs cases d'affilée.
-export default function GrilleDisponibilites({ value, onChange }) {
+// allowedSlots (optionnel) : tableau de { jour, heure } représentant les
+// seuls créneaux à afficher (ex: horaires officiels d'une catégorie d'âge).
+// Si absent, la grille complète (tous les jours/heures) est affichée.
+export default function GrilleDisponibilites({ value, onChange, allowedSlots }) {
   const selected = new Set((value || []).map(d => cellKey(d.jour, d.heure)));
   const [dragMode, setDragMode] = useState(null); // 'select' | 'deselect' | null
   const isDragging = useRef(false);
+
+  // Jours et heures effectivement affichés : soit tout (comportement par
+  // défaut), soit seulement ceux couverts par allowedSlots, dans l'ordre
+  // habituel jour/heure pour rester lisible même si allowedSlots est fourni
+  // dans un ordre quelconque.
+  const { jours, heures, allowedSet } = useMemo(() => {
+    if (!allowedSlots || allowedSlots.length === 0) {
+      return { jours: ALL_JOURS, heures: ALL_HEURES, allowedSet: null };
+    }
+    const set = new Set(allowedSlots.map(s => cellKey(s.jour, s.heure)));
+    const joursPresents = ALL_JOURS.filter(j => allowedSlots.some(s => s.jour === j));
+    const heuresPresentes = ALL_HEURES.filter(h => allowedSlots.some(s => s.heure === h));
+    return { jours: joursPresents, heures: heuresPresentes, allowedSet: set };
+  }, [allowedSlots]);
 
   const toggleCell = useCallback((jour, heure, forceMode) => {
     const key = cellKey(jour, heure);
@@ -68,6 +85,14 @@ export default function GrilleDisponibilites({ value, onChange }) {
     }
   };
 
+  if (jours.length === 0 || heures.length === 0) {
+    return (
+      <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+        Aucun créneau disponible pour cette catégorie d'âge pour le moment.
+      </p>
+    );
+  }
+
   return (
     <div
       onMouseUp={handleMouseUp}
@@ -80,7 +105,7 @@ export default function GrilleDisponibilites({ value, onChange }) {
         <thead>
           <tr>
             <th style={{ padding: '4px 6px', textAlign: 'left', fontWeight: 500, color: 'var(--text-secondary)', fontSize: 11 }}></th>
-            {JOURS.map(jour => (
+            {jours.map(jour => (
               <th key={jour} style={{ padding: '4px 2px', fontWeight: 600, color: 'var(--text-primary)', fontSize: 11 }}>
                 {jour.slice(0, 3)}
               </th>
@@ -88,13 +113,16 @@ export default function GrilleDisponibilites({ value, onChange }) {
           </tr>
         </thead>
         <tbody>
-          {HEURES.map(heure => (
+          {heures.map(heure => (
             <tr key={heure}>
               <td style={{ padding: '2px 6px', color: 'var(--text-secondary)', fontSize: 11, whiteSpace: 'nowrap' }}>
                 {heure}
               </td>
-              {JOURS.map(jour => {
+              {jours.map(jour => {
                 const key = cellKey(jour, heure);
+                if (allowedSet && !allowedSet.has(key)) {
+                  return <td key={jour} style={{ width: 32, height: 28 }} />;
+                }
                 const isSelected = selected.has(key);
                 return (
                   <td
