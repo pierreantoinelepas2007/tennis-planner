@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, TextField, DispoAdder } from './Common.jsx';
 import { api } from '../api.js';
 
-export default function AdminProfs({ profs, onChanged }) {
+export default function AdminProfs({ profs, courts, onChanged }) {
   const [name, setName] = useState('');
   const [specialite, setSpecialite] = useState('');
   const [error, setError] = useState(null);
@@ -29,9 +29,9 @@ export default function AdminProfs({ profs, onChanged }) {
     }
   };
 
-  const addDispo = async (profId, jour, debut, fin) => {
+  const addDispo = async (profId, jour, debut, fin, courtId) => {
     try {
-      await api.addProfDispo(profId, { jour, debut, fin });
+      await api.addProfDispo(profId, { jour, debut, fin, courtId });
       onChanged();
     } catch (e) {
       console.error(e);
@@ -89,14 +89,14 @@ export default function AdminProfs({ profs, onChanged }) {
                 {p.disponibilites.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun créneau renseigné</span>}
                 {p.disponibilites.map(d => (
                   <span key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}>
-                    {d.jour} {d.debut}-{d.fin}
+                    {d.jour} {d.debut}-{d.fin} {d.courtId && `· ${courts.find(c => c.id === d.courtId)?.name || '?'}`}
                     <button onClick={() => removeDispo(p.id, d.id)} style={{ padding: 0, border: 'none', background: 'transparent' }} aria-label="Retirer ce créneau">
                       <i className="ti ti-x" style={{ fontSize: 13 }}></i>
                     </button>
                   </span>
                 ))}
               </div>
-              <DispoAdder onAdd={(jour, debut, fin) => addDispo(p.id, jour, debut, fin)} />
+              <DispoAdder onAdd={(jour, debut, fin, courtId) => addDispo(p.id, jour, debut, fin, courtId)} courts={courts} />
             </div>
           </Card>
         ))}

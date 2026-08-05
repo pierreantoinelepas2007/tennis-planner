@@ -232,7 +232,7 @@ app.get('/api/profs', requireAdmin, async (req, res) => {
       id: p.id,
       name: p.name,
       specialite: p.specialite,
-      disponibilites: dispoRows.filter(d => d.prof_id === p.id).map(d => ({ id: d.id, jour: d.jour, debut: d.debut, fin: d.fin })),
+      disponibilites: dispoRows.filter(d => d.prof_id === p.id).map(d => ({ id: d.id, courtId: d.court_id, jour: d.jour, debut: d.debut, fin: d.fin })),
     }));
     res.json(profs);
   } catch (e) {
@@ -251,7 +251,7 @@ app.get('/api/profs/names', async (req, res) => {
     const { rows: dispoRows } = await pool.query('SELECT * FROM prof_disponibilites');
     const profs = rows.map(p => ({
       name: p.name,
-      disponibilites: dispoRows.filter(d => d.prof_id === p.id).map(d => ({ jour: d.jour, debut: d.debut, fin: d.fin })),
+      disponibilites: dispoRows.filter(d => d.prof_id === p.id).map(d => ({ courtId: d.court_id, jour: d.jour, debut: d.debut, fin: d.fin })),
     }));
     res.json(profs);
   } catch (e) {
@@ -288,10 +288,13 @@ app.delete('/api/profs/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/profs/:id/disponibilites', requireAdmin, async (req, res) => {
   try {
-    const { jour, debut, fin } = req.body;
+    const { jour, debut, fin, courtId } = req.body;
+    if (!courtId) {
+      return res.status(400).json({ error: 'Le terrain est obligatoire pour un créneau de professeur.' });
+    }
     const id = uid();
-    await pool.query('INSERT INTO prof_disponibilites (id, prof_id, jour, debut, fin) VALUES ($1, $2, $3, $4, $5)',
-      [id, req.params.id, jour, debut, fin]);
+    await pool.query('INSERT INTO prof_disponibilites (id, prof_id, court_id, jour, debut, fin) VALUES ($1, $2, $3, $4, $5, $6)',
+      [id, req.params.id, courtId, jour, debut, fin]);
     res.status(201).json({ id });
   } catch (e) {
     console.error(e);

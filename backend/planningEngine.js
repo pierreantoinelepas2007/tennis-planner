@@ -163,18 +163,27 @@ function levelIndex(student) {
 }
 
 // students: lignes de la table students, avec jouer_avec déjà parsé en tableau JS
-// profs: lignes de profs, chacune avec .disponibilites (tableau de {jour, debut, fin})
+// profs: lignes de profs, chacune avec .disponibilites (tableau de {jour, debut, fin, courtId})
 // courts: lignes de courts
 // slots: lignes de court_slots, chacune avec .court_id
 function generatePlanningProposal(students, profs, courts, slots) {
   const possibleSlots = [];
   slots.forEach(slot => {
     profs.forEach(prof => {
-      const overlaps = (prof.disponibilites || []).some(d =>
-        d.jour === slot.jour &&
-        timeToMinutes(d.debut) <= timeToMinutes(slot.debut) &&
-        timeToMinutes(d.fin) >= timeToMinutes(slot.fin)
-      );
+      const overlaps = (prof.disponibilites || []).some(d => {
+        const sameTime = d.jour === slot.jour &&
+          timeToMinutes(d.debut) <= timeToMinutes(slot.debut) &&
+          timeToMinutes(d.fin) >= timeToMinutes(slot.fin);
+        if (!sameTime) return false;
+        // Si la disponibilité précise un terrain (cas normal désormais, un
+        // prof est attitré à un terrain précis à chaque créneau selon le
+        // planning du club), elle ne compte que pour CE terrain. Les
+        // disponibilités plus anciennes, sans terrain renseigné, restent
+        // valables sur n'importe quel terrain (comportement de repli).
+        const courtIdField = d.court_id !== undefined ? d.court_id : d.courtId;
+        if (courtIdField) return courtIdField === slot.court_id;
+        return true;
+      });
       if (overlaps) {
         possibleSlots.push({ slot, prof });
       }

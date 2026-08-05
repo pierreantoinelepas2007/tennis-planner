@@ -64,11 +64,19 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
           const profTimeKey = `${prof.id}|${slot.jour}|${slot.debut}`;
           if (usedProfKeysThisPass.has(profTimeKey)) return; // déjà proposé sur un autre terrain à cet horaire
 
-          const profAvailable = (prof.disponibilites || []).some(d =>
-            d.jour === slot.jour &&
-            timeToMinutes(d.debut) <= timeToMinutes(slot.debut) &&
-            timeToMinutes(d.fin) >= timeToMinutes(slot.fin)
-          );
+          const profAvailable = (prof.disponibilites || []).some(d => {
+            const sameTime = d.jour === slot.jour &&
+              timeToMinutes(d.debut) <= timeToMinutes(slot.debut) &&
+              timeToMinutes(d.fin) >= timeToMinutes(slot.fin);
+            if (!sameTime) return false;
+            // Un prof attitré à un terrain précis pour ce créneau n'est
+            // considéré disponible QUE sur ce terrain (voir le planning
+            // officiel du club, où un même prof change de terrain selon
+            // l'heure) ; les disponibilités sans terrain renseigné restent
+            // valables sur n'importe quel terrain (comportement de repli).
+            if (d.courtId) return d.courtId === court.id;
+            return true;
+          });
           if (!profAvailable) return;
           const profAlreadyUsed = planning.some(b =>
             b.profId === prof.id && b.jour === slot.jour && b.debut === slot.debut && b.fin === slot.fin

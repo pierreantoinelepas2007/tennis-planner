@@ -144,6 +144,10 @@ export default function FormulaireEleve({ onCreated }) {
 
   const doSubmit = async () => {
     if (!name.trim() || submitting) return;
+    if (!adresse.trim()) {
+      setError("L'adresse est obligatoire.");
+      return;
+    }
     if (!email.trim()) {
       setError("L'adresse email est obligatoire.");
       return;
@@ -232,7 +236,7 @@ export default function FormulaireEleve({ onCreated }) {
                 )}
               </label>
 
-              <TextField label="Adresse (facultatif)" value={adresse} onChange={setAdresse} placeholder="Rue, numéro, code postal, ville" />
+              <TextField label="Adresse" value={adresse} onChange={setAdresse} placeholder="Rue, numéro, code postal, ville" />
               <TextField label="Email" value={email} onChange={setEmail} placeholder="exemple@email.com" />
               <TextField label="Numéro de téléphone" value={telephone} onChange={setTelephone} placeholder="Ex : 0470 12 34 56" />
 

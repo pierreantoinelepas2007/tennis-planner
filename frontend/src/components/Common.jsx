@@ -39,14 +39,15 @@ export function SelectField({ label, value, onChange, options }) {
   );
 }
 
-export function DispoAdder({ onAdd }) {
+export function DispoAdder({ onAdd, courts }) {
   const [jour, setJour] = useState(JOURS[0]);
   const [debut, setDebut] = useState('');
   const [fin, setFin] = useState('');
+  const [courtId, setCourtId] = useState(courts && courts.length > 0 ? courts[0].id : '');
 
   const submit = () => {
-    if (!debut || !fin) return;
-    onAdd(jour, debut, fin);
+    if (!debut || !fin || !courtId) return;
+    onAdd(jour, debut, fin, courtId);
     setDebut(''); setFin('');
   };
 
@@ -58,6 +59,10 @@ export function DispoAdder({ onAdd }) {
       <input type="time" value={debut} onChange={e => setDebut(e.target.value)} style={{ width: 110 }} />
       <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>à</span>
       <input type="time" value={fin} onChange={e => setFin(e.target.value)} style={{ width: 110 }} />
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>terrain</span>
+      <select value={courtId} onChange={e => setCourtId(e.target.value)} style={{ width: 90 }}>
+        {(courts || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
       <button onClick={submit} style={{ padding: '6px 12px' }}>
         <i className="ti ti-plus" style={{ fontSize: 14 }}></i>
       </button>

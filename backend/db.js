@@ -94,6 +94,14 @@ async function initDb() {
     );
   `);
 
+  // Migration : ajoute la colonne "court_id" pour préciser sur quel terrain
+  // un prof est disponible à ce créneau (un même prof peut être attitré à
+  // des terrains différents selon l'heure — voir le planning du club). La
+  // référence à "courts" n'est ajoutée qu'ici, une fois cette table créée.
+  await pool.query(`
+    ALTER TABLE prof_disponibilites ADD COLUMN IF NOT EXISTS court_id TEXT REFERENCES courts(id) ON DELETE CASCADE;
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS court_slots (
       id TEXT PRIMARY KEY,
