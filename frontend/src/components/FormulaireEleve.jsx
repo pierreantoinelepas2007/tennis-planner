@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, TextField, SelectField } from './Common.jsx';
 import { api } from '../api.js';
-import GrilleDisponibilites from './GrilleDisponibilites.jsx';
+import CoursBlock from './CoursBlock.jsx';
 
 // Échelle des classements belges (AFT / Tennis Padel Wallonie-Bruxelles), du
 // plus faible au plus fort, telle qu'affichée dans le formulaire. "Non
@@ -63,6 +63,8 @@ const CATEGORY_LABELS = {
   tennis: 'Tennis (2017 et avant)',
 };
 
+const MAX_COURSES = 5;
+
 // Détermine la catégorie d'âge officielle du club à partir d'une date de
 // naissance, cohérent avec le calcul fait côté serveur (voir
 // backend/planningEngine.js, fonction ageCategory).
@@ -89,57 +91,78 @@ function allowedSlotsForCategory(category) {
   return slots;
 }
 
+function makeEmptyCourse() {
+  return {
+    preferenceGroupe: 'indifferent',
+    tailleGroupe: '',
+    dureeMinutes: null,
+    jouerAvec: '',
+    memeHoraireAvec: '',
+    profPrefere: '',
+    disponibilites: [],
+  };
+}
+
 export default function FormulaireEleve({ onCreated }) {
   const [name, setName] = useState('');
   const [dateNaissance, setDateNaissance] = useState('');
+  const [adresse, setAdresse] = useState('');
+  const [email, setEmail] = useState('');
+  const [telephone, setTelephone] = useState('');
   const [classement, setClassement] = useState('');
-  const [preference, setPreference] = useState('indifferent');
-  const [jouerAvec, setJouerAvec] = useState('');
-  const [memeHoraireAvec, setMemeHoraireAvec] = useState('');
-  const [profPrefere, setProfPrefere] = useState('');
-  const [disponibilites, setDisponibilites] = useState([]);
+  const [courses, setCourses] = useState([makeEmptyCourse()]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [profNames, setProfNames] = useState([]);
+  const [profs, setProfs] = useState([]);
   const [lastSubmittedName, setLastSubmittedName] = useState('');
 
   useEffect(() => {
-    api.getProfNames().then(setProfNames).catch(() => setProfNames([]));
+    api.getProfNames().then(setProfs).catch(() => setProfs([]));
   }, []);
 
-  // Réinitialise uniquement les champs propres à un cours (préférences,
-  // disponibilités), en gardant nom/âge/classement identiques : utilisé
-  // quand la même personne ajoute un autre cours à la suite.
-  const resetCourseFields = () => {
-    setPreference('indifferent');
-    setJouerAvec(''); setMemeHoraireAvec(''); setProfPrefere(''); setDisponibilites([]);
-  };
-
-  // Réinitialise tout le formulaire : utilisé quand on inscrit une nouvelle
-  // personne différente.
-  const resetAll = () => {
-    setName(''); setDateNaissance(''); setClassement('');
-    resetCourseFields();
-  };
-
   const ageCategory = computeAgeCategory(dateNaissance);
-  const allowedSlots = ageCategory ? allowedSlotsForCategory(ageCategory) : null;
+  const baseSlots = ageCategory ? allowedSlotsForCategory(ageCategory) : null;
+
+  const resetAll = () => {
+    setName(''); setDateNaissance(''); setAdresse(''); setEmail(''); setTelephone(''); setClassement('');
+    setCourses([makeEmptyCourse()]);
+  };
+
+  const updateCourse = (index, nextCourse) => {
+    setCourses(prev => prev.map((c, i) => (i === index ? nextCourse : c)));
+  };
+
+  const addCourse = () => {
+    if (courses.length >= MAX_COURSES) return;
+    setCourses(prev => [...prev, makeEmptyCourse()]);
+  };
+
+  const removeCourse = (index) => {
+    setCourses(prev => prev.filter((_, i) => i !== index));
+  };
 
   const doSubmit = async () => {
     if (!name.trim() || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      await api.createStudent({
+      await api.createStudentBatch({
         name: name.trim(),
         dateNaissance: dateNaissance || null,
+        adresse: adresse.trim(),
+        email: email.trim(),
+        telephone: telephone.trim(),
         classement: classement || 'Non classé',
-        preferenceGroupe: preference,
-        jouerAvec: jouerAvec.split(',').map(s => s.trim()).filter(Boolean),
-        memeHoraireAvec: memeHoraireAvec.trim(),
-        profPrefere: profPrefere.trim(),
-        disponibilites,
+        courses: courses.map(c => ({
+          preferenceGroupe: c.preferenceGroupe,
+          tailleGroupe: c.tailleGroupe || null,
+          dureeMinutes: c.dureeMinutes,
+          jouerAvec: c.jouerAvec.split(',').map(s => s.trim()).filter(Boolean),
+          memeHoraireAvec: c.memeHoraireAvec.trim(),
+          profPrefere: c.profPrefere.trim(),
+          disponibilites: c.disponibilites,
+        })),
       });
       setLastSubmittedName(name.trim());
       setSubmitted(true);
@@ -156,43 +179,24 @@ export default function FormulaireEleve({ onCreated }) {
     doSubmit();
   };
 
-  const addAnotherCourse = () => {
-    resetCourseFields();
-    setSubmitted(false);
-  };
-
-  const startNewPerson = () => {
-    resetAll();
-    setSubmitted(false);
-  };
-
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto' }}>
+    <div style={{ maxWidth: 600, margin: '0 auto' }}>
       <Card>
         {submitted ? (
           <>
             <h2 style={{ marginTop: 0 }}>Inscription enregistrée</h2>
             <div style={{ background: 'var(--success-bg)', color: 'var(--success-text)', padding: '10px 14px', borderRadius: 8, fontSize: 14, marginBottom: 20 }}>
-              Le cours pour <b>{lastSubmittedName}</b> a bien été enregistré.
+              L'inscription de <b>{lastSubmittedName}</b> ({courses.length} heure{courses.length > 1 ? 's' : ''} de cours) a bien été enregistrée.
             </div>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
-              {lastSubmittedName} souhaite-t-elle/il un autre cours cette semaine (par exemple un cours individuel en plus du cours en groupe) ?
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={addAnotherCourse} style={{ width: '100%' }}>
-                <i className="ti ti-plus" style={{ marginRight: 6 }}></i>
-                Ajouter un autre cours pour {lastSubmittedName}
-              </button>
-              <button onClick={startNewPerson} style={{ width: '100%', background: 'var(--fill-secondary)' }}>
-                Inscrire une autre personne
-              </button>
-            </div>
+            <button onClick={resetAll} style={{ width: '100%' }}>
+              Nouvelle inscription
+            </button>
           </>
         ) : (
           <>
-            <h2 style={{ marginTop: 0 }}>Inscription à un cours</h2>
+            <h2 style={{ marginTop: 0 }}>Inscription à l'école de tennis</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: -8, marginBottom: 20 }}>
-              Si plusieurs cours par semaine sont souhaités (par exemple un cours en groupe et un cours individuel), on pourra ajouter le second cours juste après avoir validé celui-ci.
+              Si plusieurs heures de cours sont souhaitées par semaine, ajoutez-les toutes ci-dessous avant de valider — tout est enregistré en une seule fois.
             </p>
 
             {error && (
@@ -202,7 +206,9 @@ export default function FormulaireEleve({ onCreated }) {
             )}
 
             <form onSubmit={submit}>
+              <h3 style={{ fontSize: 15, marginBottom: 4 }}>Informations personnelles</h3>
               <TextField label="Nom" value={name} onChange={setName} placeholder="Prénom et nom" />
+
               <label style={{ display: 'block', marginBottom: 18 }}>
                 <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>Date de naissance</span>
                 <input
@@ -217,6 +223,11 @@ export default function FormulaireEleve({ onCreated }) {
                   </span>
                 )}
               </label>
+
+              <TextField label="Adresse (facultatif)" value={adresse} onChange={setAdresse} placeholder="Rue, numéro, code postal, ville" />
+              <TextField label="Email (facultatif)" value={email} onChange={setEmail} placeholder="exemple@email.com" />
+              <TextField label="Numéro de téléphone (facultatif)" value={telephone} onChange={setTelephone} placeholder="Ex : 0470 12 34 56" />
+
               <SelectField
                 label="Classement officiel"
                 value={classement}
@@ -224,53 +235,39 @@ export default function FormulaireEleve({ onCreated }) {
                 options={CLASSEMENT_OPTIONS}
               />
 
-              <SelectField
-                label="Préférence"
-                value={preference}
-                onChange={setPreference}
-                options={[
-                  { value: 'indifferent', label: 'Pas de préférence' },
-                  { value: 'groupe', label: 'Cours en groupe' },
-                  { value: 'individuel', label: 'Cours individuel' },
-                ]}
-              />
+              <h3 style={{ fontSize: 15, marginBottom: 4, marginTop: 24 }}>
+                Vos cours ({courses.length} heure{courses.length > 1 ? 's' : ''} par semaine)
+              </h3>
 
-              <TextField
-                label="Souhaite jouer avec (facultatif)"
-                value={jouerAvec}
-                onChange={setJouerAvec}
-                placeholder="Noms séparés par une virgule, ex : Léa Dupont, Tom Martin"
-              />
+              {!dateNaissance ? (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  Indiquez d'abord la date de naissance ci-dessus pour renseigner les cours souhaités.
+                </p>
+              ) : (
+                <>
+                  {courses.map((course, i) => (
+                    <CoursBlock
+                      key={i}
+                      index={i}
+                      course={course}
+                      onChange={next => updateCourse(i, next)}
+                      onRemove={() => removeCourse(i)}
+                      canRemove={courses.length > 1}
+                      profs={profs}
+                      allowedSlotsForCategory={baseSlots}
+                    />
+                  ))}
 
-              <TextField
-                label="Souhaite le même horaire que (facultatif)"
-                value={memeHoraireAvec}
-                onChange={setMemeHoraireAvec}
-                placeholder="Nom de la personne (ex : frère, sœur, conjoint...)"
-              />
+                  {courses.length < MAX_COURSES && (
+                    <button type="button" onClick={addCourse} style={{ width: '100%', marginBottom: 18 }}>
+                      <i className="ti ti-plus" style={{ marginRight: 6 }}></i>
+                      Ajouter une heure de cours ({courses.length}/{MAX_COURSES})
+                    </button>
+                  )}
+                </>
+              )}
 
-              <SelectField
-                label="Préférence de professeur (facultatif)"
-                value={profPrefere}
-                onChange={setProfPrefere}
-                options={[
-                  { value: '', label: 'Indifférent' },
-                  ...profNames.map(n => ({ value: n, label: n })),
-                ]}
-              />
-
-              <div style={{ marginBottom: 18 }}>
-                <span style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Disponibilités</span>
-                {!dateNaissance ? (
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Indiquez d'abord la date de naissance pour voir les créneaux disponibles pour cette catégorie.
-                  </p>
-                ) : (
-                  <GrilleDisponibilites value={disponibilites} onChange={setDisponibilites} allowedSlots={allowedSlots} />
-                )}
-              </div>
-
-              <button type="submit" disabled={submitting} style={{ width: '100%' }}>
+              <button type="submit" disabled={submitting || !dateNaissance} style={{ width: '100%' }}>
                 {submitting ? 'Enregistrement...' : "Enregistrer l'inscription"}
               </button>
             </form>

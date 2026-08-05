@@ -57,9 +57,14 @@ app.get('/api/students', requireAdmin, async (req, res) => {
       name: r.name,
       age: r.age,
       dateNaissance: r.date_naissance ? r.date_naissance.toISOString().slice(0, 10) : null,
+      adresse: r.adresse,
+      email: r.email,
+      telephone: r.telephone,
       classement: r.classement,
       niveauEtoile: r.niveau_etoile,
       preferenceGroupe: r.preference_groupe,
+      tailleGroupe: r.taille_groupe,
+      dureeMinutes: r.duree_minutes,
       jouerAvec: r.jouer_avec || [],
       memeHoraireAvec: r.terrain_adjacent_avec,
       profPrefere: r.prof_prefere,
@@ -96,9 +101,10 @@ app.post('/api/students', async (req, res) => {
     }
     await client.query('BEGIN');
     await client.query(
-      `INSERT INTO students (id, name, age, date_naissance, classement, niveau_etoile, preference_groupe, jouer_avec, terrain_adjacent_avec, prof_prefere)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, b.name.trim(), computedAge, b.dateNaissance || null, b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent',
+      `INSERT INTO students (id, name, age, date_naissance, adresse, email, telephone, classement, niveau_etoile, preference_groupe, taille_groupe, duree_minutes, jouer_avec, terrain_adjacent_avec, prof_prefere)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      [id, b.name.trim(), computedAge, b.dateNaissance || null, b.adresse || null, b.email || null, b.telephone || null,
+        b.classement || null, b.niveauEtoile || null, b.preferenceGroupe || 'indifferent', b.tailleGroupe || null, b.dureeMinutes || null,
         JSON.stringify(b.jouerAvec || []), b.memeHoraireAvec || null, b.profPrefere || null]
     );
     const disponibilites = Array.isArray(b.disponibilites) ? b.disponibilites : [];
@@ -119,6 +125,75 @@ app.post('/api/students', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: "Erreur serveur lors de l'enregistrement de l'élève." });
+  } finally {
+    client.release();
+  }
+});
+
+// Calcule l'âge (en années) à partir d'une date de naissance, ou renvoie null
+// si la date est absente/invalide. Utilisé pour dériver automatiquement la
+// catégorie d'âge du club sans redemander l'âge séparément.
+function computeAgeFromBirthDate(dateNaissance) {
+  if (!dateNaissance) return null;
+  const birth = new Date(dateNaissance);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  return String(age);
+}
+
+// Soumission groupée : une personne peut demander plusieurs heures de cours
+// par semaine (jusqu'à 5) en une seule fois. Les informations personnelles
+// (nom, date de naissance, coordonnées, classement) sont communes à toutes
+// les entrées créées ; chaque cours de la liste `courses` a ses propres
+// préférences (groupe/individuel, taille ou durée, prof, disponibilités).
+// Toute la soumission est atomique : soit toutes les entrées sont créées,
+// soit aucune ne l'est.
+app.post('/api/students/batch', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const b = req.body;
+    if (!b.name || !b.name.trim()) {
+      return res.status(400).json({ error: 'Le nom est obligatoire.' });
+    }
+    const courses = Array.isArray(b.courses) ? b.courses : [];
+    if (courses.length === 0) {
+      return res.status(400).json({ error: 'Au moins une heure de cours doit être renseignée.' });
+    }
+    if (courses.length > 5) {
+      return res.status(400).json({ error: 'Maximum 5 heures de cours par semaine.' });
+    }
+
+    const computedAge = computeAgeFromBirthDate(b.dateNaissance);
+    const createdIds = [];
+
+    await client.query('BEGIN');
+    for (const course of courses) {
+      const id = uid();
+      await client.query(
+        `INSERT INTO students (id, name, age, date_naissance, adresse, email, telephone, classement, niveau_etoile, preference_groupe, taille_groupe, duree_minutes, jouer_avec, terrain_adjacent_avec, prof_prefere)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        [id, b.name.trim(), computedAge, b.dateNaissance || null, b.adresse || null, b.email || null, b.telephone || null,
+          b.classement || null, b.niveauEtoile || null, course.preferenceGroupe || 'indifferent', course.tailleGroupe || null, course.dureeMinutes || null,
+          JSON.stringify(course.jouerAvec || []), course.memeHoraireAvec || null, course.profPrefere || null]
+      );
+      const disponibilites = Array.isArray(course.disponibilites) ? course.disponibilites : [];
+      for (const d of disponibilites) {
+        await client.query(
+          'INSERT INTO student_disponibilites (id, student_id, jour, heure) VALUES ($1, $2, $3, $4)',
+          [uid(), id, d.jour, d.heure]
+        );
+      }
+      createdIds.push(id);
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ ids: createdIds });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(e);
+    res.status(500).json({ error: "Erreur serveur lors de l'enregistrement de l'inscription." });
   } finally {
     client.release();
   }
@@ -167,12 +242,18 @@ app.get('/api/profs', requireAdmin, async (req, res) => {
 });
 
 // Route publique allégée (sans mot de passe), utilisée uniquement par le
-// formulaire d'inscription pour proposer la liste des noms de profs dans un
-// menu déroulant. Ne renvoie que les noms, aucune autre donnée.
+// formulaire d'inscription pour proposer la liste des profs (avec leurs
+// disponibilités, pour filtrer la grille selon le prof choisi) dans un menu
+// déroulant. Ne renvoie que le nom et les créneaux, aucune autre donnée.
 app.get('/api/profs/names', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT name FROM profs ORDER BY created_at ASC');
-    res.json(rows.map(r => r.name));
+    const { rows } = await pool.query('SELECT id, name FROM profs ORDER BY created_at ASC');
+    const { rows: dispoRows } = await pool.query('SELECT * FROM prof_disponibilites');
+    const profs = rows.map(p => ({
+      name: p.name,
+      disponibilites: dispoRows.filter(d => d.prof_id === p.id).map(d => ({ jour: d.jour, debut: d.debut, fin: d.fin })),
+    }));
+    res.json(profs);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Erreur serveur.' });

@@ -79,7 +79,15 @@ export default function AdminEleves({ students, profs, onChanged }) {
                   {s.classement && s.classement !== 'Non classé' ? `Classé : ${s.classement}` : 'Non classé'}
                   {' · '}
                   {s.preferenceGroupe === 'groupe' ? 'Préfère groupe' : s.preferenceGroupe === 'individuel' ? 'Préfère individuel' : 'Indifférent'}
+                  {s.preferenceGroupe === 'groupe' && s.tailleGroupe && ` (${s.tailleGroupe} pers.)`}
+                  {s.preferenceGroupe === 'groupe' && !s.tailleGroupe && ' (loisir)'}
+                  {s.preferenceGroupe === 'individuel' && s.dureeMinutes === 90 && ' (1h30)'}
                 </p>
+                {(s.email || s.telephone) && (
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                    {[s.email, s.telephone].filter(Boolean).join(' · ')}
+                  </p>
+                )}
                 {s.jouerAvec?.length > 0 && (
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
                     Veut jouer avec : {s.jouerAvec.map((name, i) => (

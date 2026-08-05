@@ -58,6 +58,7 @@ export const api = {
   // Students
   getStudents: () => request('/students'),
   createStudent: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),
+  createStudentBatch: (data) => request('/students/batch', { method: 'POST', body: JSON.stringify(data) }),
   updateStudent: (id, patch) => request(`/students/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteStudent: (id) => request(`/students/${id}`, { method: 'DELETE' }),
 

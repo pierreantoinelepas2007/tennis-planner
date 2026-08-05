@@ -21,9 +21,14 @@ async function initDb() {
       name TEXT NOT NULL,
       age TEXT,
       date_naissance DATE,
+      adresse TEXT,
+      email TEXT,
+      telephone TEXT,
       classement TEXT,
       niveau_etoile INTEGER,
       preference_groupe TEXT,
+      taille_groupe TEXT,
+      duree_minutes INTEGER,
       jouer_avec JSONB DEFAULT '[]',
       terrain_adjacent_avec TEXT,
       prof_prefere TEXT,
@@ -32,10 +37,25 @@ async function initDb() {
     );
   `);
 
-  // Migration : ajoute la colonne "date_naissance" si la table existait déjà
-  // avant son introduction (ne fait rien si elle est déjà présente).
+  // Migration : ajoute les colonnes introduites après la création initiale de
+  // la table (ne fait rien si elles sont déjà présentes).
   await pool.query(`
     ALTER TABLE students ADD COLUMN IF NOT EXISTS date_naissance DATE;
+  `);
+  await pool.query(`
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS adresse TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS email TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS telephone TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS taille_groupe TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE students ADD COLUMN IF NOT EXISTS duree_minutes INTEGER;
   `);
 
   await pool.query(`
