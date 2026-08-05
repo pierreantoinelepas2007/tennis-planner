@@ -1,5 +1,5 @@
 import React from 'react';
-import { SelectField } from './Common.jsx';
+import { SelectField, TextField } from './Common.jsx';
 import GrilleDisponibilites from './GrilleDisponibilites.jsx';
 
 // Un bloc représentant une heure de cours souhaitée : préférence groupe ou
@@ -103,6 +103,20 @@ export default function CoursBlock({
           { value: '', label: 'Indifférent' },
           ...profs.map(p => ({ value: p.name, label: p.name })),
         ]}
+      />
+
+      <TextField
+        label="Souhaite jouer avec (facultatif)"
+        value={course.jouerAvec}
+        onChange={v => update({ jouerAvec: v })}
+        placeholder="Noms séparés par une virgule, ex : Léa Dupont, Tom Martin"
+      />
+
+      <TextField
+        label="Souhaite le même horaire que (facultatif)"
+        value={course.memeHoraireAvec}
+        onChange={v => update({ memeHoraireAvec: v })}
+        placeholder="Nom de la personne (ex : frère, sœur, conjoint...)"
       />
 
       <div style={{ marginBottom: 4 }}>

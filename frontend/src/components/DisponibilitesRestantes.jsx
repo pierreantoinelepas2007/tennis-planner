@@ -41,6 +41,14 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
     const map = {};
     JOURS.forEach(jour => { HEURES.forEach(heure => { map[`${jour}|${heure}`] = []; }); });
 
+    // Un même prof ne peut occuper qu'un seul terrain à un horaire donné :
+    // même s'il est physiquement disponible et que plusieurs terrains sont
+    // libres à ce moment, on ne doit lui proposer qu'UN SEUL de ces terrains,
+    // jamais afficher le même prof en double sur plusieurs terrains
+    // simultanément (ce qui suggérerait, à tort, qu'il pourrait être à deux
+    // endroits en même temps).
+    const usedProfKeysThisPass = new Set();
+
     courts.forEach(court => {
       (court.slots || []).forEach(slot => {
         const heure = slot.debut;
@@ -53,6 +61,9 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
         if (alreadyUsed) return;
 
         profs.forEach(prof => {
+          const profTimeKey = `${prof.id}|${slot.jour}|${slot.debut}`;
+          if (usedProfKeysThisPass.has(profTimeKey)) return; // déjà proposé sur un autre terrain à cet horaire
+
           const profAvailable = (prof.disponibilites || []).some(d =>
             d.jour === slot.jour &&
             timeToMinutes(d.debut) <= timeToMinutes(slot.debut) &&
@@ -64,6 +75,7 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
           );
           if (profAlreadyUsed) return;
           map[key].push({ courtId: court.id, profId: prof.id, jour: slot.jour, debut: slot.debut, fin: slot.fin });
+          usedProfKeysThisPass.add(profTimeKey);
         });
       });
     });
