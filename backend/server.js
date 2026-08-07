@@ -572,6 +572,73 @@ app.post('/api/test/clear', requireAdmin, async (req, res) => {
   }
 });
 
+// Recharge les vraies disponibilités des professeurs (jour + heure + terrain
+// précis) à partir du planning officiel du club (fichier Excel fourni),
+// remplaçant intégralement les anciens créneaux (souvent créés avant
+// l'introduction du terrain obligatoire, donc invalides pour la contrainte
+// stricte "un prof = un terrain précis par créneau"). Route protégée par
+// mot de passe admin ET par une clé supplémentaire, car elle est destructive
+// (elle supprime d'abord tous les créneaux existants des profs concernés).
+const REAL_PROF_SCHEDULE = [
+  { prof: 'Gauthier', terrain: 'B', jour: 'Samedi', debut: '09:00', fin: '15:00' },
+  { prof: 'Nick', terrain: 'D', jour: 'Mercredi', debut: '09:00', fin: '12:00' },
+  { prof: 'Flavian', terrain: 'D', jour: 'Samedi', debut: '09:00', fin: '12:00' },
+  { prof: 'Nick', terrain: 'A', jour: 'Mercredi', debut: '12:00', fin: '17:00' },
+  { prof: 'Flavian', terrain: 'A', jour: 'Samedi', debut: '12:00', fin: '19:00' },
+  { prof: 'Gauthier', terrain: 'B', jour: 'Mercredi', debut: '12:00', fin: '18:00' },
+  { prof: 'Philippe', terrain: 'D', jour: 'Mercredi', debut: '12:00', fin: '18:00' },
+  { prof: 'Philippe', terrain: 'D', jour: 'Samedi', debut: '12:00', fin: '19:00' },
+  { prof: 'Flavian', terrain: 'A', jour: 'Mardi', debut: '16:00', fin: '19:00' },
+  { prof: 'Gauthier', terrain: 'A', jour: 'Jeudi', debut: '16:00', fin: '18:00' },
+  { prof: 'Fabio', terrain: 'A', jour: 'Vendredi', debut: '16:00', fin: '18:00' },
+  { prof: 'Gauthier', terrain: 'B', jour: 'Lundi', debut: '16:00', fin: '20:00' },
+  { prof: 'Flavian', terrain: 'B', jour: 'Vendredi', debut: '16:00', fin: '19:00' },
+  { prof: 'Flavian', terrain: 'D', jour: 'Lundi', debut: '16:00', fin: '21:00' },
+  { prof: 'Gauthier', terrain: 'D', jour: 'Mardi', debut: '16:00', fin: '20:00' },
+  { prof: 'Philippe', terrain: 'D', jour: 'Jeudi', debut: '16:00', fin: '19:00' },
+  { prof: 'Philippe', terrain: 'D', jour: 'Vendredi', debut: '16:00', fin: '20:00' },
+  { prof: 'Gauthier', terrain: 'D', jour: 'Mercredi', debut: '18:00', fin: '20:00' },
+];
+
+app.post('/api/admin/reload-prof-schedules', requireAdmin, async (req, res) => {
+  if (req.query.key !== 'vautour2026') return res.status(403).json({ error: 'Clé invalide.' });
+  const client = await pool.connect();
+  try {
+    const { rows: profRows } = await client.query('SELECT id, name FROM profs');
+    const { rows: courtRows } = await client.query('SELECT id, name FROM courts');
+    const profIdByName = Object.fromEntries(profRows.map(p => [p.name, p.id]));
+    const courtIdByName = Object.fromEntries(courtRows.map(c => [c.name, c.id]));
+
+    const missingProfs = [...new Set(REAL_PROF_SCHEDULE.map(e => e.prof))].filter(n => !profIdByName[n]);
+    const missingCourts = [...new Set(REAL_PROF_SCHEDULE.map(e => e.terrain))].filter(n => !courtIdByName[n]);
+    if (missingProfs.length > 0 || missingCourts.length > 0) {
+      client.release();
+      return res.status(400).json({
+        error: `Professeurs ou terrains introuvables en base : ${[...missingProfs, ...missingCourts].join(', ')}. Vérifiez qu'ils existent avec exactement ces noms avant de recharger.`,
+      });
+    }
+
+    const affectedProfIds = [...new Set(REAL_PROF_SCHEDULE.map(e => profIdByName[e.prof]))];
+
+    await client.query('BEGIN');
+    await client.query('DELETE FROM prof_disponibilites WHERE prof_id = ANY($1)', [affectedProfIds]);
+    for (const entry of REAL_PROF_SCHEDULE) {
+      await client.query(
+        'INSERT INTO prof_disponibilites (id, prof_id, court_id, jour, debut, fin) VALUES ($1, $2, $3, $4, $5, $6)',
+        [uid(), profIdByName[entry.prof], courtIdByName[entry.terrain], entry.jour, entry.debut, entry.fin]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true, inserted: REAL_PROF_SCHEDULE.length });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(e);
+    res.status(500).json({ error: 'Erreur lors du rechargement des disponibilités.' });
+  } finally {
+    client.release();
+  }
+});
+
 // ---------- Frontend statique (build React) ----------
 
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
