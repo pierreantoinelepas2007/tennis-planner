@@ -104,13 +104,6 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
         Grille complète des créneaux des professeurs (terrain précis, tel que déclaré dans l'onglet Professeurs). Les cours déjà posés affichent leurs participants ; cliquez sur un créneau encore libre pour y placer un participant non casé.
       </p>
 
-      <details style={{ marginBottom: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-        <summary>Diagnostic (temporaire)</summary>
-        <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
-          {JSON.stringify(profs.map(p => ({ name: p.name, disponibilites: p.disponibilites })), null, 2)}
-        </pre>
-      </details>
-
       {error && (
         <Card style={{ marginBottom: 14, background: 'var(--danger-bg)' }}>
           <p style={{ margin: 0, color: 'var(--danger-text)', fontSize: 14 }}>{error}</p>

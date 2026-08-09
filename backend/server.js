@@ -539,7 +539,7 @@ app.delete('/api/planning/:id', requireAdmin, async (req, res) => {
 // Déclenché manuellement via /api/test/seed?key=demo pour insérer 21 participants
 // fictifs variés, et /api/test/clear?key=demo pour tout retirer proprement.
 
-app.post('/api/test/seed', requireAdmin, async (req, res) => {
+app.get('/api/test/seed', requireAdmin, async (req, res) => {
   if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
   try {
     const ids = await seedTestStudents(pool);
@@ -550,7 +550,7 @@ app.post('/api/test/seed', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/test/clear', requireAdmin, async (req, res) => {
+app.get('/api/test/clear', requireAdmin, async (req, res) => {
   if (req.query.key !== 'demo') return res.status(403).json({ error: 'Clé invalide.' });
   try {
     const testNames = [
@@ -600,7 +600,7 @@ const REAL_PROF_SCHEDULE = [
   { prof: 'Gauthier', terrain: 'D', jour: 'Mercredi', debut: '18:00', fin: '20:00' },
 ];
 
-app.post('/api/admin/reload-prof-schedules', requireAdmin, async (req, res) => {
+app.get('/api/admin/reload-prof-schedules', requireAdmin, async (req, res) => {
   if (req.query.key !== 'vautour2026') return res.status(403).json({ error: 'Clé invalide.' });
   const client = await pool.connect();
   try {
