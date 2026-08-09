@@ -30,66 +30,53 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
 
   const courtsById = useMemo(() => Object.fromEntries(courts.map(c => [c.id, c])), [courts]);
   const profsById = useMemo(() => Object.fromEntries(profs.map(p => [p.id, p])), [profs]);
+  const studentsById = useMemo(() => Object.fromEntries(students.map(s => [s.id, s])), [students]);
 
   const placedIds = useMemo(() => new Set(planning.flatMap(b => b.studentIds)), [planning]);
   const unplacedStudents = useMemo(() => students.filter(s => !placedIds.has(s.id)), [students, placedIds]);
 
-  // Pour chaque (jour, heure), la liste des créneaux (terrain + prof) encore
-  // libres : le terrain a un créneau déclaré à ce moment, un prof y est
-  // disponible, et ce terrain n'est pas déjà occupé dans le planning actuel.
-  const freeByTime = useMemo(() => {
+  // La grille part directement des disponibilités déclarées pour chaque
+  // professeur (jour + heure + terrain précis, tel que saisi dans l'onglet
+  // Professeurs) plutôt que de recalculer un croisement séparé avec les
+  // créneaux de terrain : c'est la vraie source de vérité du club, et ça
+  // évite tout risque de désynchronisation entre les deux.
+  //
+  // Chaque case affiche soit le cours déjà posé à ce moment (avec les
+  // participants), soit un badge cliquable si le créneau est encore libre.
+  const cellsByTime = useMemo(() => {
     const map = {};
     JOURS.forEach(jour => { HEURES.forEach(heure => { map[`${jour}|${heure}`] = []; }); });
 
-    // Un même prof ne peut occuper qu'un seul terrain à un horaire donné :
-    // même s'il est physiquement disponible et que plusieurs terrains sont
-    // libres à ce moment, on ne doit lui proposer qu'UN SEUL de ces terrains,
-    // jamais afficher le même prof en double sur plusieurs terrains
-    // simultanément (ce qui suggérerait, à tort, qu'il pourrait être à deux
-    // endroits en même temps).
-    const usedProfKeysThisPass = new Set();
+    profs.forEach(prof => {
+      (prof.disponibilites || []).forEach(d => {
+        if (!d.courtId) return; // créneau sans terrain précisé : pas affichable dans cette grille
+        const startMin = timeToMinutes(d.debut);
+        const endMin = timeToMinutes(d.fin);
+        for (let m = startMin; m < endMin; m += 60) {
+          const h = Math.floor(m / 60);
+          const heure = `${h.toString().padStart(2, '0')}:00`;
+          const key = `${d.jour}|${heure}`;
+          if (!(key in map)) continue; // hors de la grille affichée (avant 8h ou après 21h)
 
-    courts.forEach(court => {
-      (court.slots || []).forEach(slot => {
-        const heure = slot.debut;
-        const key = `${slot.jour}|${heure}`;
-        if (!(key in map)) return; // hors de la grille affichée (avant 8h ou après 21h)
-
-        const alreadyUsed = planning.some(b =>
-          b.courtId === court.id && b.jour === slot.jour && b.debut === slot.debut && b.fin === slot.fin
-        );
-        if (alreadyUsed) return;
-
-        profs.forEach(prof => {
-          const profTimeKey = `${prof.id}|${slot.jour}|${slot.debut}`;
-          if (usedProfKeysThisPass.has(profTimeKey)) return; // déjà proposé sur un autre terrain à cet horaire
-
-          const profAvailable = (prof.disponibilites || []).some(d => {
-            const sameTime = d.jour === slot.jour &&
-              timeToMinutes(d.debut) <= timeToMinutes(slot.debut) &&
-              timeToMinutes(d.fin) >= timeToMinutes(slot.fin);
-            if (!sameTime) return false;
-            // Un prof attitré à un terrain précis pour ce créneau n'est
-            // considéré disponible QUE sur ce terrain (voir le planning
-            // officiel du club, où un même prof change de terrain selon
-            // l'heure) ; les disponibilités sans terrain renseigné restent
-            // valables sur n'importe quel terrain (comportement de repli).
-            if (d.courtId) return d.courtId === court.id;
-            return true;
-          });
-          if (!profAvailable) return;
-          const profAlreadyUsed = planning.some(b =>
-            b.profId === prof.id && b.jour === slot.jour && b.debut === slot.debut && b.fin === slot.fin
+          const fin = `${(h + 1).toString().padStart(2, '0')}:00`;
+          const existingBlock = planning.find(b =>
+            b.courtId === d.courtId && b.profId === prof.id && b.jour === d.jour && b.debut === heure && b.fin === fin
           );
-          if (profAlreadyUsed) return;
-          map[key].push({ courtId: court.id, profId: prof.id, jour: slot.jour, debut: slot.debut, fin: slot.fin });
-          usedProfKeysThisPass.add(profTimeKey);
-        });
+
+          map[key].push({
+            courtId: d.courtId,
+            profId: prof.id,
+            jour: d.jour,
+            debut: heure,
+            fin,
+            block: existingBlock || null,
+          });
+        }
       });
     });
 
     return map;
-  }, [courts, profs, planning]);
+  }, [profs, planning]);
 
   const assignStudent = async (studentId) => {
     if (!assigning) return;
@@ -114,7 +101,7 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
     <div>
       <h2 style={{ marginTop: 0 }}>Disponibilités restantes</h2>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: -8 }}>
-        Créneaux encore libres (terrain + professeur disponible, pas déjà utilisés dans le planning). Cliquez sur un créneau libre pour y placer un participant non casé.
+        Grille complète des créneaux des professeurs (terrain précis, tel que déclaré dans l'onglet Professeurs). Les cours déjà posés affichent leurs participants ; cliquez sur un créneau encore libre pour y placer un participant non casé.
       </p>
 
       {error && (
@@ -148,23 +135,43 @@ export default function DisponibilitesRestantes({ students, profs, courts, plann
                 <td style={{ padding: '2px 6px', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{heure}</td>
                 {JOURS.map(jour => {
                   const key = `${jour}|${heure}`;
-                  const free = freeByTime[key] || [];
+                  const cells = cellsByTime[key] || [];
                   return (
-                    <td key={jour} style={{ border: '1px solid var(--border)', padding: 3, minWidth: 70, verticalAlign: 'top' }}>
+                    <td key={jour} style={{ border: '1px solid var(--border)', padding: 3, minWidth: 90, verticalAlign: 'top' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {free.map((f, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setAssigning(f)}
-                            style={{
-                              fontSize: 10, padding: '2px 4px', border: 'none', borderRadius: 4,
-                              background: profColor[f.profId], color: 'white', cursor: 'pointer',
-                            }}
-                            title={`${courtsById[f.courtId]?.name} · ${profsById[f.profId]?.name}`}
-                          >
-                            {courtsById[f.courtId]?.name} · {profsById[f.profId]?.name}
-                          </button>
-                        ))}
+                        {cells.map((c, i) => {
+                          const courtName = courtsById[c.courtId]?.name || '?';
+                          const profName = profsById[c.profId]?.name || '?';
+                          if (c.block) {
+                            const names = c.block.studentIds.map(id => studentsById[id]?.name).filter(Boolean);
+                            return (
+                              <div
+                                key={i}
+                                style={{
+                                  fontSize: 10, padding: '2px 4px', borderRadius: 4,
+                                  background: profColor[c.profId], color: 'white', opacity: 0.85,
+                                }}
+                                title={`${courtName} · ${profName} · ${names.join(', ') || 'aucun participant'}`}
+                              >
+                                {courtName} · {profName}
+                                {names.length > 0 && <div style={{ fontSize: 9, opacity: 0.9 }}>{names.join(', ')}</div>}
+                              </div>
+                            );
+                          }
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => setAssigning(c)}
+                              style={{
+                                fontSize: 10, padding: '2px 4px', border: 'none', borderRadius: 4,
+                                background: profColor[c.profId], color: 'white', cursor: 'pointer',
+                              }}
+                              title={`${courtName} · ${profName} (libre)`}
+                            >
+                              {courtName} · {profName}
+                            </button>
+                          );
+                        })}
                       </div>
                     </td>
                   );
