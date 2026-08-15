@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api, getAdminToken, clearAdminToken } from './api.js';
 import Header from './components/Header.jsx';
 import Accueil from './components/Accueil.jsx';
-import FormulaireEleve from './components/FormulaireEleve.jsx';
+import FormulaireChoixSport from './components/FormulaireChoixSport.jsx';
 import AdminEleves from './components/AdminEleves.jsx';
 import AdminProfs from './components/AdminProfs.jsx';
 import AdminTerrains from './components/AdminTerrains.jsx';
@@ -81,7 +81,7 @@ export default function App() {
           <h1 style={{ margin: 0, fontSize: 24 }}>Planificateur école de tennis</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Inscription à un cours</p>
         </div>
-        <FormulaireEleve onCreated={() => {}} />
+        <FormulaireChoixSport onCreated={() => {}} />
         <p style={{ textAlign: 'center', marginTop: 24 }}>
           <button onClick={() => setShowLogin(true)} style={{ fontSize: 12, padding: '4px 10px', color: 'var(--text-muted)' }}>
             Accès professeur
@@ -118,7 +118,7 @@ export default function App() {
       <Header tab={tab} setTab={setTab} />
       <div>
         {tab === 'accueil' && <Accueil setTab={setTab} students={students} profs={profs} courts={courts} />}
-        {tab === 'formulaire' && <FormulaireEleve onCreated={refreshAll} />}
+        {tab === 'formulaire' && <FormulaireChoixSport onCreated={refreshAll} />}
         {tab === 'admin-eleves' && <AdminEleves students={students} profs={profs} onChanged={refreshAll} />}
         {tab === 'admin-profs' && <AdminProfs profs={profs} courts={courts} onChanged={refreshAll} />}
         {tab === 'admin-terrains' && <AdminTerrains courts={courts} onChanged={refreshAll} />}

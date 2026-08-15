@@ -1,7 +1,17 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 
 const ALL_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-const ALL_HEURES = Array.from({ length: 14 }, (_, i) => `${(8 + i).toString().padStart(2, '0')}:00`);
+// Toutes les heures pleines ET demi-heures de 8h à 21h30, pour couvrir aussi
+// bien le tennis (créneaux d'1h, heures pleines uniquement en pratique) que
+// le padel (créneaux de 1h30 pouvant démarrer à la demi-heure, ex: 16h30).
+// Sans allowedSlots, seules les heures pleines sont utilisées quelque part
+// dans l'app actuellement, donc ce changement n'affecte pas le tennis.
+const ALL_HEURES = Array.from({ length: 28 }, (_, i) => {
+  const totalMinutes = 8 * 60 + i * 30;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+});
 
 function cellKey(jour, heure) {
   return `${jour}|${heure}`;

@@ -7,6 +7,7 @@ const { generatePlanningProposal } = require('./planningEngine');
 const { seedIfEmpty } = require('./seed');
 const { seedPadelIfEmpty } = require('./padelSeed');
 const { seedTestStudents } = require('./seedTestData');
+const { registerPadelRoutes } = require('./padelRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +47,11 @@ function requireAdmin(req, res, next) {
   }
   res.status(401).json({ error: 'Accès réservé, connexion requise.' });
 }
+
+// Toutes les routes padel (préfixées /api/padel/*) sont définies dans un
+// module séparé, pour garder ce système entièrement distinct du tennis dans
+// le code comme en base de données.
+registerPadelRoutes(app, pool, uid, requireAdmin);
 
 // ---------- STUDENTS ----------
 

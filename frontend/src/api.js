@@ -83,4 +83,30 @@ export const api = {
   generatePlanning: () => request('/planning/generate', { method: 'POST' }),
   updatePlanningBlock: (id, patch) => request(`/planning/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deletePlanningBlock: (id) => request(`/planning/${id}`, { method: 'DELETE' }),
+
+  // ---------- PADEL (système séparé du tennis) ----------
+
+  // Students padel
+  getPadelStudents: () => request('/padel/students'),
+  createPadelStudentBatch: (data) => request('/padel/students/batch', { method: 'POST', body: JSON.stringify(data) }),
+  deletePadelStudent: (id) => request(`/padel/students/${id}`, { method: 'DELETE' }),
+
+  // Profs padel
+  getPadelProfs: () => request('/padel/profs'),
+  getPadelProfNames: () => request('/padel/profs/names'),
+  createPadelProf: (data) => request('/padel/profs', { method: 'POST', body: JSON.stringify(data) }),
+  deletePadelProf: (id) => request(`/padel/profs/${id}`, { method: 'DELETE' }),
+  addPadelProfDispo: (profId, data) => request(`/padel/profs/${profId}/disponibilites`, { method: 'POST', body: JSON.stringify(data) }),
+  removePadelProfDispo: (profId, dispoId) => request(`/padel/profs/${profId}/disponibilites/${dispoId}`, { method: 'DELETE' }),
+
+  // Courts padel
+  getPadelCourts: () => request('/padel/courts'),
+  createPadelCourt: (data) => request('/padel/courts', { method: 'POST', body: JSON.stringify(data) }),
+  deletePadelCourt: (id) => request(`/padel/courts/${id}`, { method: 'DELETE' }),
+
+  // Planning padel
+  getPadelPlanning: () => request('/padel/planning'),
+  createPadelPlanningBlock: (data) => request('/padel/planning', { method: 'POST', body: JSON.stringify(data) }),
+  updatePadelPlanningBlock: (id, patch) => request(`/padel/planning/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deletePadelPlanningBlock: (id) => request(`/padel/planning/${id}`, { method: 'DELETE' }),
 };
