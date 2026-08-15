@@ -629,7 +629,16 @@ app.get('/api/admin/reload-prof-schedules', async (req, res) => {
       );
     }
     await client.query('COMMIT');
-    res.json({ ok: true, inserted: REAL_PROF_SCHEDULE.length });
+
+    // Diagnostic temporaire : relit immédiatement ce qui est en base après
+    // l'insertion, pour confirmer sans ambiguïté que les données sont bien
+    // présentes (et avec quel court_id) juste après le COMMIT.
+    const { rows: verifRows } = await client.query(
+      'SELECT prof_id, court_id, jour, debut, fin FROM prof_disponibilites WHERE prof_id = ANY($1) ORDER BY jour, debut',
+      [affectedProfIds]
+    );
+
+    res.json({ ok: true, inserted: REAL_PROF_SCHEDULE.length, verifCount: verifRows.length, verifSample: verifRows.slice(0, 5) });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(e);
