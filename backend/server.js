@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { pool, initDb } = require('./db');
 const { generatePlanningProposal } = require('./planningEngine');
 const { seedIfEmpty } = require('./seed');
+const { seedPadelIfEmpty } = require('./padelSeed');
 const { seedTestStudents } = require('./seedTestData');
 
 const app = express();
@@ -672,6 +673,7 @@ app.get('*', (req, res) => {
 
 initDb()
   .then(() => seedIfEmpty(pool))
+  .then(() => seedPadelIfEmpty(pool))
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Serveur démarré sur le port ${PORT}`);

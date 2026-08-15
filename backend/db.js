@@ -134,6 +134,84 @@ async function initDb() {
     ALTER TABLE planning_blocks ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT false;
   `);
 
+  // ---------- PADEL (système entièrement séparé du tennis) ----------
+  // Le padel a ses propres catégories d'âge, ses propres tailles de groupe
+  // (2/3/4 joueurs), une durée de cours de 1h30 pour les adultes, et des
+  // créneaux horaires à la demi-heure (16h30, 19h30, etc.) — d'où des tables
+  // dédiées plutôt que de réutiliser les tables tennis, pour ne jamais
+  // risquer de mélanger les deux systèmes ou de casser le tennis existant.
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS padel_courts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS padel_profs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      specialite TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS padel_prof_disponibilites (
+      id TEXT PRIMARY KEY,
+      prof_id TEXT REFERENCES padel_profs(id) ON DELETE CASCADE,
+      court_id TEXT REFERENCES padel_courts(id) ON DELETE CASCADE,
+      jour TEXT NOT NULL,
+      debut TEXT NOT NULL,
+      fin TEXT NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS padel_students (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      date_naissance DATE,
+      age TEXT,
+      adresse TEXT,
+      email TEXT,
+      telephone TEXT,
+      preference_groupe TEXT,
+      taille_groupe TEXT,
+      duree_minutes INTEGER,
+      jouer_avec JSONB DEFAULT '[]',
+      meme_horaire_avec TEXT,
+      prof_prefere TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS padel_student_disponibilites (
+      id TEXT PRIMARY KEY,
+      student_id TEXT REFERENCES padel_students(id) ON DELETE CASCADE,
+      jour TEXT NOT NULL,
+      heure TEXT NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS padel_planning_blocks (
+      id TEXT PRIMARY KEY,
+      court_id TEXT,
+      prof_id TEXT,
+      jour TEXT NOT NULL,
+      debut TEXT NOT NULL,
+      fin TEXT NOT NULL,
+      student_ids JSONB DEFAULT '[]',
+      score REAL,
+      locked BOOLEAN DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
   console.log('Base de données initialisée (tables vérifiées/créées).');
 }
 
